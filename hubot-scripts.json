@@ -1,1 +1,19 @@
-["redis-brain.coffee", "tweet.coffee", "shipit.coffee"]
+[
+  "mongolab-brain.coffee", 
+  "tweet.coffee",
+  "shipit.coffee",
+  "ackbar.coffee",
+  "applause.coffee",
+  "availability.coffee",
+  "beerme.coffee",
+  "brb.coffee",
+  "commitmessage.coffee",
+  "do-it-live.coffee",
+  "karma.coffee",
+  "pagerduty.coffee",
+  "tell.coffee",
+  "twitter.coffee",
+  "twss.coffee",
+  "wat.coffee",
+  "whoisout.coffee"
+]
