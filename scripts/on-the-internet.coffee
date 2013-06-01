@@ -14,5 +14,5 @@
 #   jcarouth
 
 module.exports = (robot) ->
-  robot.hear /lat(ah?|er)|adios|peace out|c ?ya|see ya/i, (msg) ->
+  robot.hear /lat(ah?|er)|adios|peace out|c ?ya|see ya|(good ?)bye/i, (msg) ->
     msg.send "See you on the Internet."
