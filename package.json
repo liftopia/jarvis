@@ -25,7 +25,8 @@
     "hubot-hipchat": "~2.5.1-1",
     "mongodb": "*",
     "moment": "1.6.2",
-    "underscore": "*"
+    "underscore": "*",
+    "xml2js": "0.1.14"
   },
   "engines": {
     "node": ">= 0.8.x",
