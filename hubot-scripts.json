@@ -12,6 +12,7 @@
   "jenkins.coffee",
   "karma.coffee",
   "kittens.coffee",
+  "mongolab-brain.coffee",
   "pagerduty.coffee",
   "sprintly.coffee",
   "tell.coffee",
