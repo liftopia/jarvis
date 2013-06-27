@@ -55,7 +55,7 @@ jenkinsBuild = (msg) ->
           msg.send "Jenkins says: #{body}"
 
 module.exports = (robot) ->
-  robot.respond /deploy(?: (.+)){0, 2}/i, (msg) ->
+  robot.respond /deploy(?: (.+)){0,2}/i, (msg) ->
     jenkinsBuild(msg)
 
   robot.jenkins = {
