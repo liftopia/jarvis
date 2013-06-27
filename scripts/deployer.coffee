@@ -20,6 +20,7 @@
 #   doomspork
 
 querystring = require 'querystring'
+_ = require 'underscore'
 
 job = 'ReleaseBranch'
 
