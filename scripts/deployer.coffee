@@ -20,7 +20,7 @@
 #   doomspork
 
 querystring = require 'querystring'
-_ = require 'underscore'
+_           = require 'underscore'
 
 job = 'ReleaseBranch'
 
@@ -36,9 +36,11 @@ jenkinsBuild = (msg) ->
        memo[tokens[0]] = tokens[1] if tokens.length > 1
        memo), {})
 
-    params = querystring.stringify(repo_options)  
+    params = querystring.stringify(_.defaults(repo_options, defaults))
 
     path = if params then "#{url}/job/#{job}/buildWithParameters?#{params}" else "#{url}/job/#{job}/build"
+
+    console.log("Jenkins job path: #{params}")
 
     req = msg.http(path)
 
