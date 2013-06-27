@@ -40,7 +40,7 @@ jenkinsBuild = (msg) ->
 
     path = if params then "#{url}/job/#{job}/buildWithParameters?#{params}" else "#{url}/job/#{job}/build"
 
-    console.log("Jenkins job path: #{params}")
+    console.log("Jenkins job path: #{path}")
 
     req = msg.http(path)
 
