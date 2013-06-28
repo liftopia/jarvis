@@ -9,14 +9,9 @@
 #   HUBOT_JENKINS_AUTH
 #
 # Commands:
-#   hubot jenkins build <job> - builds the specified Jenkins job
-#   hubot jenkins build <job>, <params> - builds the specified Jenkins job with parameters as key=value&key2=value2
-#   hubot jenkins list <filter> - lists Jenkins jobs
-#   hubot jenkins describe <job> - Describes the specified Jenkins job
-
+#   hubot deploy <repo/branch> <repo/branch>
 #
 # Author:
-#   dougcole
 #   doomspork
 
 querystring = require 'querystring'
@@ -30,14 +25,14 @@ defaults =
 
 jenkinsBuild = (msg) ->
     url = process.env.HUBOT_JENKINS_URL
-    
-    repo_options = _.inject(_.rest(msg.match, 2), ((memo, matched_string) ->
-       tokens = matched_string.split('/')
+   
+    iterator = (memo, str) ->
+       tokens = str.split('/')
        memo[tokens[0]] = tokens[1] if tokens.length > 1
-       memo), {})
+       memo
 
-    params = querystring.stringify(_.defaults(repo_options, defaults))
-
+    repo_branches = _.defaults(_.inject(msg.match[1].split(' '), iterator, {}), defaults)
+    params = querystring.stringify(repo_branches)
     path = if params then "#{url}/job/#{job}/buildWithParameters?#{params}" else "#{url}/job/#{job}/build"
 
     console.log("Jenkins job path: #{path}")
@@ -58,7 +53,7 @@ jenkinsBuild = (msg) ->
           msg.send "Jenkins says: #{body}"
 
 module.exports = (robot) ->
-  robot.respond /deploy(?: (.+)){0,2}/i, (msg) ->
+  robot.respond /deploy (.+)?/i, (msg) ->
     jenkinsBuild(msg)
 
   robot.jenkins = {
