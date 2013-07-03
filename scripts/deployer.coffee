@@ -68,8 +68,6 @@ jenkinsBuild = (msg) ->
     params = jenkinsParameters(repo_branches)
     path = "#{url}/job/#{job}/buildWithParameters?#{querystring.stringify(params)}"
 
-    msg.send "#{mention} your deployment should be here shortly: http://#{params['host_name']}.liftopia.nu"
-
     req = msg.http(path)
 
     if process.env.HUBOT_JENKINS_AUTH
