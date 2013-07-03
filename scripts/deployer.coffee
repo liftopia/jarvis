@@ -17,13 +17,47 @@
 querystring = require 'querystring'
 _           = require 'underscore'
 
+# Internal: Contains the Jenkin's job name
 job = 'ReleaseBranch'
 
+# Internal: Branch defaults for rtopia and liftopia.com
 defaults =
   'rtopia':        'master'
   'liftopia.com':  'develop'
 
+# Intenral: Create a unique host name
+#
+# rtopia_branch - the branch name as a String
+# ptopia_branch - the branch name as a String
+#
+# Returns a host name as a String
+makeUniqueHostName = (rtopia_branch, ptopia_branch) ->
+  "#{rtopia_branch}-#{ptopia_branch}-#{Date.now()}"
+
+# Internal: build the query string for the Jenkin's job
+#
+# branches - an object similar to `defaults` above
+#
+# Returns a URL safe string
+jenkinsParameters = (branches) ->
+  rtopia_branch = branches['rtopia']
+  ptopia_branch = branches['liftopia.com']
+
+  params =
+    'host_name': makeUniqueHostName(rtopia_branch, ptopia_branch)
+    'rtopia_branch': rtopia_branch
+    'ptopia_branch': ptopia_branch
+
+  querystring.stringify(params)
+
+# Internal: Trigger a build
+#
+# msg - a Hubot message object
+#
+# Returns nothing
 jenkinsBuild = (msg) ->
+    mention = "@#{msg.message.user.mention_name}"
+    msg.send "You've got it #{mention}!"
     url = process.env.HUBOT_JENKINS_URL
    
     iterator = (memo, str) ->
@@ -32,10 +66,10 @@ jenkinsBuild = (msg) ->
        memo
 
     repo_branches = _.defaults(_.inject(msg.match[1].split(' '), iterator, {}), defaults)
-    params = querystring.stringify(repo_branches)
-    path = if params then "#{url}/job/#{job}/buildWithParameters?#{params}" else "#{url}/job/#{job}/build"
-
-    console.log("Jenkins job path: #{path}")
+    params = jenkinsParameters(repo_branches)
+    path = "#{url}/job/#{job}/buildWithParameters?#{params}"
+    
+    console.log(path)
 
     req = msg.http(path)
 
@@ -48,7 +82,7 @@ jenkinsBuild = (msg) ->
         if err
           msg.send "Jenkins says: #{err}"
         else if res.statusCode == 302
-          msg.send "Build started for #{job} #{res.headers.location}"
+          msg.send "#{mention} your deployment should be here shortly: http://#{params['host_name']}.liftopia.nu"
         else
           msg.send "Jenkins says: #{body}"
 
