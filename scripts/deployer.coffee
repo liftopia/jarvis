@@ -38,7 +38,7 @@ makeUniqueHostName = (rtopia_branch, ptopia_branch) ->
 #
 # branches - an object similar to `defaults` above
 #
-# Returns a URL safe string
+# Returns a hash of parameters 
 jenkinsParameters = (branches) ->
   rtopia_branch = branches['rtopia']
   ptopia_branch = branches['liftopia.com']
@@ -48,7 +48,6 @@ jenkinsParameters = (branches) ->
     'rtopia_branch': rtopia_branch
     'ptopia_branch': ptopia_branch
 
-  querystring.stringify(params)
 
 # Internal: Trigger a build
 #
@@ -67,9 +66,9 @@ jenkinsBuild = (msg) ->
 
     repo_branches = _.defaults(_.inject(msg.match[1].split(' '), iterator, {}), defaults)
     params = jenkinsParameters(repo_branches)
-    path = "#{url}/job/#{job}/buildWithParameters?#{params}"
-    
-    console.log(path)
+    path = "#{url}/job/#{job}/buildWithParameters?#{querystring.stringify(params)}"
+
+    msg.send "#{mention} your deployment should be here shortly: http://#{params['host_name']}.liftopia.nu"
 
     req = msg.http(path)
 
