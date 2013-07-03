@@ -44,9 +44,9 @@ jenkinsParameters = (branches) ->
   ptopia_branch = branches['liftopia.com']
 
   params =
-    'host_name': makeUniqueHostName(rtopia_branch, ptopia_branch)
-    'rtopia_branch': rtopia_branch
-    'ptopia_branch': ptopia_branch
+    'HOST_NAME': makeUniqueHostName(rtopia_branch, ptopia_branch)
+    'RTOPIA_BRANCH': rtopia_branch
+    'PTOPIA_BRANCH': ptopia_branch
 
 
 # Internal: Trigger a build
