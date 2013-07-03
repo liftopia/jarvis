@@ -56,7 +56,7 @@ jenkinsParameters = (branches) ->
 # Returns nothing
 jenkinsBuild = (msg) ->
     mention = "@#{msg.message.user.mention_name}"
-    msg.send "You've got it #{mention}!"
+    msg.send "You've got it!"
     url = process.env.HUBOT_JENKINS_URL
    
     iterator = (memo, str) ->
