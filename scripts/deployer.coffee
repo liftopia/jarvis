@@ -20,6 +20,10 @@ _           = require 'underscore'
 # Internal: Contains the Jenkin's job name
 job = 'ReleaseBranch'
 
+# Internal: A list of responses for Hubot to use
+confirmative = ["If that's what you want", "I'm on it", "You've got it", "Affirmative", "Roger that", "10-4", "Copy that", "Anything for you", "With great pleasure", "Yeah", "Sure, that can be arranged"]
+punctuation  = ['.', '!', '...']
+
 # Internal: Branch defaults for rtopia and liftopia.com
 defaults =
   'rtopia':        'master'
@@ -31,8 +35,8 @@ defaults =
 # ptopia_branch - the branch name as a String
 #
 # Returns a host name as a String
-makeUniqueHostName = (rtopia_branch, ptopia_branch) ->
-  "#{rtopia_branch}-#{ptopia_branch}-#{Date.now()}"
+makeHostName = (rtopia_branch, ptopia_branch) ->
+  "#{rtopia_branch}-#{ptopia_branch}"
 
 # Internal: build the query string for the Jenkin's job
 #
@@ -44,10 +48,9 @@ jenkinsParameters = (branches) ->
   ptopia_branch = branches['liftopia.com']
 
   params =
-    'HOST_NAME': makeUniqueHostName(rtopia_branch, ptopia_branch)
+    'HOST_NAME': makeHostName(rtopia_branch, ptopia_branch)
     'RTOPIA_BRANCH': rtopia_branch
     'PTOPIA_BRANCH': ptopia_branch
-
 
 # Internal: Trigger a build
 #
@@ -56,7 +59,8 @@ jenkinsParameters = (branches) ->
 # Returns nothing
 jenkinsBuild = (msg) ->
     mention = "@#{msg.message.user.mention_name}"
-    msg.send "You've got it!"
+    msg.send "#{msg.random(confirmative)}#{msg.random(punctuation)}"
+
     url = process.env.HUBOT_JENKINS_URL
    
     iterator = (memo, str) ->
@@ -79,7 +83,7 @@ jenkinsBuild = (msg) ->
         if err
           msg.send "Jenkins says: #{err}"
         else if res.statusCode == 302
-          msg.send "#{mention} your deployment should be here shortly: http://#{params['HOST_NAME']}.liftopia.nu"
+          msg.send "#{mention}, your deployment will be available shortly at this hyperlink: http://#{params['HOST_NAME']}.liftopia.nu"
         else
           msg.send "Jenkins says: #{body}"
 
