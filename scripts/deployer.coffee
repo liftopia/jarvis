@@ -79,7 +79,7 @@ jenkinsBuild = (msg) ->
         if err
           msg.send "Jenkins says: #{err}"
         else if res.statusCode == 302
-          msg.send "#{mention} your deployment should be here shortly: http://#{params['host_name']}.liftopia.nu"
+          msg.send "#{mention} your deployment should be here shortly: http://#{params['HOST_NAME']}.liftopia.nu"
         else
           msg.send "Jenkins says: #{body}"
 
