@@ -1,15 +1,18 @@
 # Description:
-#   Interact with your Jenkins CI server
+#   Feature branch deployments
 #
 # Dependencies:
-#   None
+#   Querystring
+#   Underscore
 #
 # Configuration:
 #   HUBOT_JENKINS_URL
 #   HUBOT_JENKINS_AUTH
 #
 # Commands:
-#   hubot deploy <repo/branch> <repo/branch>
+#   hubot deploy    <hostname> <repo/branch> <repo/branch>
+#   hubot redeploy  <hostname>
+#   hubot destroy   <hostname>
 #
 # Author:
 #   doomspork
@@ -17,8 +20,123 @@
 querystring = require 'querystring'
 _           = require 'underscore'
 
-# Internal: Contains the Jenkin's job name
-job = 'ReleaseBranch'
+class Jenkins
+  # Public: Constructor
+  #
+  # robot - the Hubot instance
+  #
+  # Returns a new Jenkins instance
+  constructor: (@robot) ->
+    @url = process.env.HUBOT_JENKINS_URL
+
+  # Public: Redeploy the last request for this hostname
+  #
+  # hostname - a hostname string
+  #
+  # Returns false if hostname is unknown
+  redeploy: (hostname) ->
+    last_request = @get_deploy_request(hostname)
+    if last_request
+      @deploy(last_request['parameters'], last_request['callback'])
+    else
+      return false
+
+  # Public: Request a deployment
+  #
+  # parameters - an hash of key/value pairs to use as GET params
+  # callback - a callback method for the HTTP request
+  #
+  # Returns nothing
+  deploy: (parameters, callback) ->
+    @store_deploy_request(parameters, callback)
+    @run_job 'ReleaseBranch', parameters, callback
+
+  # Public: Destroy the deployment at a particular hostname
+  #
+  # hostname - a hostname
+  # callback - a callback for HTTP requests
+  #
+  # Returns nothing
+  destroy: (hostname, callback) ->
+    @run_job 'DestroyBranchHost', {'NodeName': hostname}, callback
+    @remove_deploy_request hostname
+
+  # Public: Run a job on Jenkins
+  #
+  # job - The job name
+  # parameters - the GET parameters as key/value pairs
+  # callback - a HTTP callback
+  #
+  # Returns nothing
+  run_job: (job, parameters, callback) ->
+    safe_params = @safe_url_params parameters
+    path = "#{@url}/job/#{job}/buildWithParameters?#{safe_params}"
+    console.log("Requesting Jenkins' job at #{path}")
+    
+    request = @robot.http(path)
+    request.header('Content-Length', 0)
+    @add_auth_header(request) if process.env.HUBOT_JENKINS_AUTH
+
+    request.post() callback
+
+  # Internal: Cache this request for destroy/redeploy
+  #
+  # params - the original parameters used
+  # callback - the origin callback used
+  #
+  # Returns nothing
+  store_deploy_request: (params, callback) ->
+    hostname = params['HOST_NAME']
+    stored_data = { parameters: params, callback: callback }
+    @robot.brain.set @hostname_cache_key(hostname), stored_data
+    @robot.brain.save
+
+  # Intenral: Retrieve the parameters and callback for a hostname
+  #
+  # hostname - a hostname to retrieve
+  #
+  # Returns the stored values
+  get_deploy_request: (hostname) ->
+    @robot.brain.get @hostname_cache_key hostname
+
+  # Internal: Remove cached request
+  #
+  # hostname - the hostname to remove from cache
+  #
+  # Returns nothing
+  remove_deploy_request: (hostname) ->
+    @robot.brain.remove @hostname_cache_key hostname
+
+  # Internal: Creates a cache key for the provided hostname
+  #
+  # hostname - a hostname
+  #
+  # Returns the cache key
+  hostname_cache_key: (hostname) ->
+    "jenkins_request:#{hostname}"
+
+  # Internal: Generate a transaction key
+  #
+  # Returns a unique key
+  transaction_key: ->
+    Date.now()
+
+  # Intenral: Add Auth to the headers
+  #
+  # request - the HTTP request object
+  #
+  # Returns nothing
+  add_auth_header: (request) ->
+    auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
+    request.headers Authorization: "Basic #{auth}"
+
+  # Internal: Make key/value paramaters URL safe
+  #
+  # parameters - key/value pairs
+  #
+  # Returns a URL safe string of parameters
+  safe_url_params: (parameters) ->
+    querystring.stringify(parameters)
 
 # Internal: A list of responses for Hubot to use
 confirmative = ["If that's what you want",
@@ -48,18 +166,15 @@ defaults =
 makeHostName = (grouped_matches) ->
   rtopia = grouped_matches['rtopia'] || ""
   ptopia = grouped_matches['liftopia.com'] || ""
-  console.log(rtopia)
-  console.log(ptopia)
   filtered_array = [rtopia, ptopia].filter (val) -> val.length
-  console.log(filtered_array)
   filtered_array.join('-')
 
-# Internal: build the query string for the Jenkin's job
+# Internal: Create the hash of Jenkins' deployment parameters
 #
 # matched_string - the captureg group from Hubot
 #
 # Returns a hash of parameters
-jenkinsParameters = (matched_string) ->
+deployment_parameters = (matched_string) ->
   iterator = (memo, str) ->
     tokens = str.split('/')
     if tokens.length > 1
@@ -85,58 +200,78 @@ jenkinsParameters = (matched_string) ->
 # params - an object containing the parameters to use
 #
 # Returns a boolean
-verifyParameters = (params) ->
+verify_hostname = (hostname)->
   errors = []
-  if params['HOST_NAME'].length > 30
-    errors.push("Host name: #{params['HOST_NAME']} is too long, please provide an override.")
+  if hostname.length > 30
+    errors.push("Host name: #{hostname} is too long.")
   errors
 
-# Internal: Trigger a build
+acknowledge = (message) ->
+  phrase = message.random(confirmative)
+  punct = message.random(punctuation)
+  message.send "#{phrase}#{punct}"
+
+# Internal: Kick off the deployment job
 #
-# msg - a Hubot message object
+# jenkins - instance of the Jenkins class
+# message - Hubot message
 #
 # Returns nothing
-jenkinsBuild = (msg) ->
-  mention = "#{msg.message.user.mention_name}"
+deploy = (jenkins, message) ->
+  acknowledge(message)
 
-  url = process.env.HUBOT_JENKINS_URL
-   
-  params = jenkinsParameters(msg.match[1])
-  validation_errors = verifyParameters(params)
+  params = deployment_parameters(message.match[1])
+  hostname = params['HOST_NAME']
+  validation_errors = verify_hostname hostname
 
   if validation_errors.length == 0
-    msg.send "#{msg.random(confirmative)}#{msg.random(punctuation)}"
-
-    safe_params = querystring.stringify(params)
-    path = "#{url}/job/#{job}/buildWithParameters?#{safe_params}"
-    
-    console.log("Requesting Jenkins' job at #{path}")
-    
-    req = msg.http(path)
-    
-    if process.env.HUBOT_JENKINS_AUTH
-      auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
-      req.headers Authorization: "Basic #{auth}"
-    
-    req.header('Content-Length', 0)
-    req.post() (err, res, body) ->
-      if err
-        msg.send "Jenkins says: #{err}"
-      else if res.statusCode == 302
-        hyperlink = "http://#{params['HOST_NAME']}.liftopia.nu"
-        msg.reply "Your deployment will be available here shortly: #{hyperlink}"
+    jenkins.deploy params, (err, res, body) ->
+      if res.statusCode == 302
+        branch_url = "http://#{hostname}.liftopia.nu"
+        message.send "Your branch should be available at #{branch_url}"
       else
-        msg.send "Jenkins says: #{body}"
+        response = if err then err else body
+        message.send "Uh oh, something happened: #{response}"
   else
-    msg.send "Errors detected, deployment aborted!"
-    msg.send validation_errors.join("\r\n")
+    message.send "Deployment aborted due to errors!"
+    message.send validation_errors.join("\r\n")
 
+# Internal: Request the host be destroyed
+#
+# jenkins - instance of Jenkins
+# hostname - which hostname to destroy
+#
+# Returns nothing
+destroy = (jenkins, hostname) ->
+  jenkins.destroy hostname, (err, res, body) ->
+    if res.statusCode == 302
+      acknowledge(message)
+    else
+      response = if err then err else body
+      msg.send "Uh oh, something happened: #{response}"
+
+# Add our new functionality to Hubot!
 module.exports = (robot) ->
-  robot.respond /deploy$/i, (msg) ->
-    msg.send msg.random ["Wrong!", "You're new at this aren't you?", "Hah, no.", "Successfully declined."]
-  robot.respond /deploy (.+)/i, (msg) ->
-    jenkinsBuild(msg)
+  jenkins = new Jenkins(robot)
 
-  robot.jenkins = {
-    build: jenkinsBuild
-  }
+  # Returns a snarky remark
+  robot.respond /deploy$/i, (msg) ->
+    msg.send msg.random ["Wrong!",
+      "You're new at this aren't you?",
+      "Hahahaha! No.",
+      "Successfully declined.",
+      "No thanks.",
+      "Let me add that to my list of things not to do.",
+      "Try again."]
+
+  robot.respond /destroy (.+)/i, (msg) ->
+    destroy(jenkins, msg.match[1])
+
+  robot.respond /redeploy (.+)/i, (msg) ->
+    hostname = msg.match[1]
+    success = jenkins.redeploy(hostname)
+    if success == false
+      msg.send "Unfortunately I have no record of #{hostname} in my brain."
+
+  robot.respond /deploy (.+)/i, (msg) ->
+    deploy(jenkins, msg)
