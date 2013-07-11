@@ -28,7 +28,7 @@ class Jenkins
   # Returns a new Jenkins instance
   constructor: (@robot) ->
     @url = process.env.HUBOT_JENKINS_URL
-
+    
   # Public: Redeploy the last request for this hostname
   #
   # hostname - a hostname string
@@ -79,6 +79,17 @@ class Jenkins
 
     request.post() callback
 
+  # Public: Lists all of the previously requested hosts
+  #
+  # Returns an array of host strings
+  list_hosts: ->
+    cache = @deployment_cache
+    for host of cache
+      host
+
+  deployment_cache: ->
+    @robot.brain.get('jenkins-deployments') || {}
+
   # Internal: Cache this request for destroy/redeploy
   #
   # params - the original parameters used
@@ -87,8 +98,9 @@ class Jenkins
   # Returns nothing
   store_deploy_request: (params, callback) ->
     hostname = params['HOST_NAME']
-    stored_data = { parameters: params, callback: callback }
-    @robot.brain.set @hostname_cache_key(hostname), stored_data
+    cache = @deployment_cache
+    cache[hostname] = { parameters: params, callback: callback }
+    @robot.brain.set 'jenkins-deployments', cache
     @robot.brain.save
 
   # Intenral: Retrieve the parameters and callback for a hostname
@@ -97,7 +109,7 @@ class Jenkins
   #
   # Returns the stored values
   get_deploy_request: (hostname) ->
-    @robot.brain.get @hostname_cache_key hostname
+    @deployment_cache[hostname]
 
   # Internal: Remove cached request
   #
@@ -105,15 +117,10 @@ class Jenkins
   #
   # Returns nothing
   remove_deploy_request: (hostname) ->
-    @robot.brain.remove @hostname_cache_key hostname
-
-  # Internal: Creates a cache key for the provided hostname
-  #
-  # hostname - a hostname
-  #
-  # Returns the cache key
-  hostname_cache_key: (hostname) ->
-    "jenkins_request:#{hostname}"
+    cache = @deployment_cache
+    delete cache[hostname]
+    @robot.brain.set 'jenkins-deployments', cache
+    @robot.brain.save
 
   # Internal: Generate a transaction key
   #
@@ -121,7 +128,7 @@ class Jenkins
   transaction_key: ->
     Date.now()
 
-  # Intenral: Add Auth to the headers
+  # Internal: Add Auth to the headers
   #
   # request - the HTTP request object
   #
@@ -218,8 +225,6 @@ acknowledge = (message) ->
 #
 # Returns nothing
 deploy = (jenkins, message) ->
-  acknowledge(message)
-
   params = deployment_parameters(message.match[1])
   hostname = params['HOST_NAME']
   validation_errors = verify_hostname hostname
@@ -242,13 +247,13 @@ deploy = (jenkins, message) ->
 # hostname - which hostname to destroy
 #
 # Returns nothing
-destroy = (jenkins, hostname) ->
+destroy = (jenkins, hostname, message) ->
   jenkins.destroy hostname, (err, res, body) ->
     if res.statusCode == 302
       acknowledge(message)
     else
-      response = if err then err else body
-      msg.send "Uh oh, something happened: #{response}"
+      response = err || body
+      message.send "Uh oh, something happened: #{response}"
 
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
@@ -265,13 +270,25 @@ module.exports = (robot) ->
       "Try again."]
 
   robot.respond /destroy (.+)/i, (msg) ->
-    destroy(jenkins, msg.match[1])
+    destroy(jenkins, msg.match[1], msg)
 
   robot.respond /redeploy (.+)/i, (msg) ->
+    acknowledge(msg)
     hostname = msg.match[1]
     success = jenkins.redeploy(hostname)
     if success == false
       msg.send "Unfortunately I have no record of #{hostname} in my brain."
 
   robot.respond /deploy (.+)/i, (msg) ->
+    acknowledge(msg)
     deploy(jenkins, msg)
+
+  robot.respond /list deployments/i, (msg) ->
+    hosts = jenkins.list_hosts()
+    if hosts.length > 0
+      msg.send "These are the ones I'm aware of:"
+      host_list = for i, host of hosts
+        "#{parseInt(i) + 1}) #{host}"
+      msg.send host_list.join("\r\n")
+    else
+      msg.send "There are none, you should do some work and try again later."
