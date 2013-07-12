@@ -18,7 +18,7 @@
 querystring = require 'querystring'
 _           = require 'underscore'
 
-class Jenkins
+class Releaser
   # Public: Constructor
   #
   # robot - the Hubot instance
@@ -102,8 +102,8 @@ deploy = (jenkins, message) ->
 
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
-  jenkins = new Jenkins(robot)
+  release = new Releaser(robot)
 
   robot.respond /release beta/i, (msg) ->
     acknowledge(msg)
-    deploy(jenkins, msg)
+    deploy(release, msg)
