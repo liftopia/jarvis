@@ -88,7 +88,7 @@ acknowledge = (message) ->
 #
 # Returns nothing
 deploy = (release, message) ->
-  if message == 'beta'
+  if message.match[1] == 'beta'
     release.deploy (err, res, body) ->
       if res.statusCode == 302
         branch_url = "http://www.liftopia.tv"
@@ -107,4 +107,4 @@ module.exports = (robot) ->
   robot.respond /release (.*)/i, (msg) ->
     console.log(msg)
     acknowledge(msg)
-    deploy(release, msg.match[1])
+    deploy(release, msg)
