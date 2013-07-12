@@ -105,5 +105,6 @@ module.exports = (robot) ->
   release = new Releaser(robot)
 
   robot.respond /release (.*)/i, (msg) ->
+    console.log(msg)
     acknowledge(msg)
     deploy(release, msg.match[1])
