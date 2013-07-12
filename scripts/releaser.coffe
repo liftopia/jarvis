@@ -23,7 +23,7 @@ class Releaser
   #
   # robot - the Hubot instance
   #
-  # Returns a new Jenkins instance
+  # Returns a new Releaser instance
   constructor: (@robot) ->
     @url = process.env.HUBOT_JENKINS_URL
 
@@ -104,6 +104,6 @@ deploy = (release, message) ->
 module.exports = (robot) ->
   release = new Releaser(robot)
 
-  robot.respond /release (.+)/i, (msg) ->
+  robot.respond /release (.*)/i, (msg) ->
     acknowledge(msg)
-    deploy(release, msg)
+    deploy(release, msg.match[1])
