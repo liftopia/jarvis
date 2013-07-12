@@ -87,9 +87,9 @@ acknowledge = (message) ->
 # message - Hubot message
 #
 # Returns nothing
-deploy = (jenkins, message) ->
-  if validation_errors.length == 0
-    jenkins.deploy (err, res, body) ->
+deploy = (release, message) ->
+  if message == 'beta'
+    release.deploy (err, res, body) ->
       if res.statusCode == 302
         branch_url = "http://www.liftopia.tv"
         message.send "Your branch should be available at #{branch_url}"
@@ -104,6 +104,6 @@ deploy = (jenkins, message) ->
 module.exports = (robot) ->
   release = new Releaser(robot)
 
-  robot.respond /release beta/i, (msg) ->
+  robot.respond /release (.+)/i, (msg) ->
     acknowledge(msg)
     deploy(release, msg)
