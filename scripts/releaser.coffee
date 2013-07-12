@@ -44,7 +44,7 @@ class Releaser
   #
   # Returns nothing
   run_job: (job, callback) ->
-    path = "#{@url}/job/#{job}/build"
+    path = "#{@url}/job/#{job}/buildWithParameters"
     console.log("Requesting Jenkins' job at #{path}")
     
     request = @robot.http(path)
