@@ -225,6 +225,7 @@ acknowledge = (message) ->
 #
 # Returns nothing
 deploy = (jenkins, message) ->
+  mention = "@#{message.message.user.mention_name}"
   params = deployment_parameters(message.match[1])
   hostname = params['HOST_NAME']
   validation_errors = verify_hostname hostname
@@ -233,7 +234,7 @@ deploy = (jenkins, message) ->
     jenkins.deploy params, (err, res, body) ->
       if res.statusCode == 302
         branch_url = "http://#{hostname}.liftopia.nu"
-        message.send "Your branch should be available at #{branch_url}"
+        message.send "#{mention}, your branch should be available at #{branch_url}"
       else
         response = if err then err else body
         message.send "Uh oh, something happened: #{response}"
@@ -286,9 +287,9 @@ module.exports = (robot) ->
   robot.respond /list deployments/i, (msg) ->
     hosts = jenkins.list_hosts()
     if hosts.length > 0
-      msg.send "These are the ones I'm aware of:"
       host_list = for i, host of hosts
         "#{parseInt(i) + 1}) #{host}"
-      msg.send host_list.join("\r\n")
+      host_string = host_list.join("\r\n")
+      msg.send "These are the ones I'm aware of:\n#{host_string}"
     else
       msg.send "There are none, you should do some work and try again later."
