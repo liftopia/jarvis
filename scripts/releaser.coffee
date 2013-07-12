@@ -95,7 +95,7 @@ deploy = (release, message) ->
     release.deploy (err, res, body) ->
       if res.statusCode == 302
         branch_url = "http://www.liftopia.tv"
-        message.send "#{capitalize(message.match[1])} should released and available at #{branch_url}"
+        message.send "#{capitalize(message.match[1])} should be release and available at #{branch_url}"
       else
         response = if err then err else body
         message.send "Uh oh, something happened: #{response}"
