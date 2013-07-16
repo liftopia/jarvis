@@ -68,10 +68,10 @@ confirmative = ["Si c'est ce que vous voulez",
   "J'ai compris",
   "5/5",
   "Biensure",
-  "Entendu!",
+  "Entendu",
   "Tout ce que vous voulez",
   "Avec plaisir",
-  "Ca marche!",
+  "Ca marche",
   "Je peux arranger ça"]
 
 punctuation  = ['.', '!', '...']
