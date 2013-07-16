@@ -1,72 +1,71 @@
 # Description:
-#   Replaces default `redis-brain` with MongoDB one. Useful
-#   to those who wants to have persistence on completely free
-#   Heroku account.
+#  Enhances hubot-brain with MongoDB. Useful for Heroku accounts that want
+#  better persistance. Falls back to memory brain if Mongo connection fails
+#  for local testing.
 #
 # Dependencies:
-#   "mongodb": "*"
-#   "underscore" "*"
+#   "mongodb": ">= 1.2.0"
 #
 # Configuration:
-#   MONGOLAB_URI
+#   MONGODB_USERNAME
+#   MONGODB_PASSWORD
+#   MONGODB_HOST
+#   MONGODB_PORT
+#   MONGODB_DB
 #
 # Commands:
 #   None
 #
 # Author:
-#   juancoen, darvin
+#   ajacksified, maxbeatty
 
-MongoClient = require('mongodb').MongoClient
-_ = require('underscore')
-
-encodeKeys = (obj) ->
-  return obj if typeof obj isnt 'object'
-  for key, value of obj
-    if obj.hasOwnProperty key
-      obj[key.replace(/\./g, ":::")] = encodeKeys(obj[key])
-      delete obj[key] if (key.indexOf(".") > -1)
-  obj
-
-decodeKeys = (obj) ->
-  return obj if typeof obj isnt 'object'
-  for key, value of obj
-    if obj.hasOwnProperty key
-      obj[key.replace(/:::/g, ".")] = encodeKeys(obj[key])
-      delete obj[key] if (key.indexOf(":::") > -1)
-  obj
+Util = require "util"
+mongodb = require "mongodb"
+Server = mongodb.Server
+Collection = mongodb.Collection
+Db = mongodb.Db
 
 module.exports = (robot) ->
-  mongoUrl   = process.env.MONGOLAB_URI 
+  user = process.env.MONGODB_USERNAME || "admin"
+  pass = process.env.MONGODB_PASSWORD || "password"
+  host = process.env.MONGODB_HOST || "localhost"
+  port = process.env.MONGODB_PORT || "27017"
+  dbname = process.env.MONGODB_DB || "hubot"
 
-  MongoClient.connect mongoUrl, (err, db) ->
-    if err?
-      throw err
-    else
-      robot.logger.debug "Successfully connected to Mongo"
+  error = (err) ->
+    console.log "==MONGO BRAIN UNAVAILABLE==\n==SWITCHING TO MEMORY BRAIN=="
+    console.log err
 
-      db.createCollection 'storage', (err, collection) ->
-        collection.findOne {}, (err, document) ->
-          if err?
-            throw err
-          else if document
-            document = decodeKeys document
-            robot.brain.mergeData document
+  server = new Server host, port, {}
+  db = new Db dbname, server, { w: 1, native_parser: true }
+
+  db.open (err, client) ->
+    return error err if err
+
+    robot.logger.debug 'Successfully opened connection to mongo'
+
+    db.authenticate user, pass, (err, success) ->
+      return error err if err
+
+      robot.logger.debug 'Successfully authenticated with mongo'
+
+      collection = new Collection client, 'hubot_storage'
+
+      collection.find().limit(1).toArray (err, results) ->
+        return error err if err
+
+        robot.logger.debug 'Successfully queried mongo'
+        robot.logger.debug Util.inspect(results, false, 4)
+
+        if results.length > 0
+          robot.brain.data = results[0]
+          robot.brain.emit 'loaded', results[0]
+        else
+          robot.logger.debug 'No results found'
 
       robot.brain.on 'save', (data) ->
-        db.collection 'storage', (err, collection) ->
-          collection.findOne {}, (err, document) ->
-            if err?
-                throw err
-            else if document 
-                document = decodeKeys document
-                _.extend(document, data)
-                collection.remove {}, (err) ->
-                    if err?
-                      throw err
-                    else
-                      newdata = encodeKeys document
-                      collection.save newdata, (err) ->
-                        throw err if err?
+        robot.logger.debug 'Save event caught by mongo'
+        robot.logger.debug Util.inspect(robot.brain.data, false, 4)
 
-      robot.brain.on 'close', ->
-        db.close()
+        collection.save robot.brain.data, (err) ->
+          console.warn err if err?
