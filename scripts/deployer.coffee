@@ -162,7 +162,7 @@ punctuation  = ['.', '!', '...']
 
 # Internal: Branch defaults for rtopia and liftopia.com
 defaults =
-  'rtopia':        'master'
+  'rtopia':        'develop'
   'liftopia.com':  'develop'
 
 # Intenral: Create a unique host name
