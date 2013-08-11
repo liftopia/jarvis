@@ -4,43 +4,170 @@
 # Dependencies:
 #   Querystring
 #   Underscore
+#   ScopedHttpClient
 #
 # Configuration:
 #   HUBOT_JENKINS_URL
 #   HUBOT_JENKINS_AUTH
 #
 # Commands:
-#   hubot deploy    <hostname> <repo/branch> <repo/branch>
-#   hubot redeploy  <hostname>
-#   hubot destroy   <hostname>
+#   hubot I'm watching    <hostname>
+#   hubot fuhgeddaboud    <hostname>
+#   hubot deploy          <hostname> <repo/branch> <repo/branch>
+#   hubot redeploy        <hostname>
+#   hubot destroy         <hostname>
 #
 # Author:
 #   doomspork
 
 querystring = require 'querystring'
 _           = require 'underscore'
+http        = require 'scoped-http-client'
+
+BRANCH_DOMAIN = 'liftopia.nu'
+
+# Internal: Get the url for a hostname
+#
+# hostname - the feature server's hostname
+#
+# Returns a string
+feature_url = (hostname) ->
+  "http://#{hostname}.#{BRANCH_DOMAIN}"
+
+# Internal: MUHAHAHA!  Helper method for tracking actions in Orwell
+#
+# action  - the action that occurred
+# user    - the user's name
+# details - any additional data
+#
+# Returns nothing
+orwell_track = (action, user, details) ->
+  data =
+    token:        'ge0XVpMpqwZWg2UjwNCaweisJhjuu6Xgzi93PnKO'
+    channel:      'jarvis'
+    action:       action
+    distinct_id:  user
+    details:      details
+
+  post_data = querystring.stringify(data)
+
+  http.create('http://api.orwell.io')
+    .path('v1/track')
+    .post(post_data) (err, resp, body) ->
+      if resp.statusCode == 200
+        console.log('Successfully tracked action with Orwell')
+      else
+        console.log("Error communicating with Orwell: #{body}")
+
+# Abstract Hubot brain
+class Storage
+  # Public: Constructor
+  #
+  # robot - hubot instance 
+  # namespace - the namespace for this storage instance
+  #
+  # Returns an instance
+  constructor: (@robot, @namespace) ->
+    @cache = {}
+    @robot.brain.on 'loaded', =>
+      if @robot.brain.data[@namespace]
+        @cache = @robot.brain.data[@namespace]
+
+  # Internal: Wraps a method in a save
+  #
+  # func - a function to wrap
+  #
+  # Returns nothing
+  save_after: ->
+    @robot.brain.data[@namespace] = @cache
+
+  # Public: Stores a value at the given key
+  #
+  # key - a unique identifier
+  # value - anything
+  #
+  # Returns nothing
+  put: (key, value) ->
+    @cache[key] = value
+    @save_after()
+
+  # Public: Gets the value at a specific key
+  #
+  # key - a key to search for
+  #
+  # Returns the value
+  get: (key) ->
+    @cache[key]
+
+  # Public: Removes the value for a given key
+  #
+  # key - the key to remove
+  #
+  # Returns nothing
+  remove: (key) ->
+    delete @cache[key]
+    @save_after
+
+  # Public: Get all stored keys
+  #
+  # Returns an Array of keys
+  keys: ->
+    _.keys @cache
+
+# A simple class to manage our deployment spectators
+class Spectators
+  constructor: (@store) ->
+
+  # Public: Add a user to the list of spectators for a hostname
+  #
+  # hostname - the hostname to watch
+  # user - the user chat name
+  #
+  # Returns nothing
+  watch: (hostname, user) ->
+    watchers = @watching(hostname)
+    if watchers.indexOf(user) == -1
+      watchers.push(user)
+      @store.put(hostname, watchers)
+
+  # Public: Remove a user from the list of spectators for a hostname
+  #
+  # hostname - the hostname to forget
+  # user - the user chat name
+  #
+  # Returns nothing
+  forget: (hostname, user) ->
+    watchers = @watching(hostname)
+    index = watchers.indexOf(user)
+    if index > -1
+      delete watchers[index]
+      @store.put(hostname, watchers)
+
+  # Public: Get the list of spectators
+  #
+  # hostname - the hostname to get spectators for
+  #
+  # Returns an Array of user names
+  watching: (hostname) ->
+    @store.get(hostname) || []
+
+  # Public: Clears the spectators for a hostname
+  #
+  # hostname - the hostname to empty
+  #
+  # Returns nothing
+  clear: (hostname) ->
+    @store.remove hostname
 
 class Jenkins
   # Public: Constructor
   #
-  # robot - the Hubot instance
+  # robot - Hubot instance
   #
   # Returns a new Jenkins instance
   constructor: (@robot) ->
     @url = process.env.HUBOT_JENKINS_URL
     
-  # Public: Redeploy the last request for this hostname
-  #
-  # hostname - a hostname string
-  #
-  # Returns false if hostname is unknown
-  redeploy: (hostname) ->
-    last_request = @get_deploy_request(hostname)
-    if last_request
-      @deploy(last_request['parameters'], last_request['callback'])
-    else
-      return false
-
   # Public: Request a deployment
   #
   # parameters - an hash of key/value pairs to use as GET params
@@ -48,7 +175,7 @@ class Jenkins
   #
   # Returns nothing
   deploy: (parameters, callback) ->
-    @store_deploy_request(parameters, callback)
+    @robot.emit 'jenkins:deploy', { hostname: parameters['HOST_NAME'] }
     @run_job 'ReleaseBranch', parameters, callback
 
   # Public: Destroy the deployment at a particular hostname
@@ -58,8 +185,8 @@ class Jenkins
   #
   # Returns nothing
   destroy: (hostname, callback) ->
+    @robot.emit 'jenkins:destroy', { hostname: hostname }
     @run_job 'DestroyBranchHost', {'NodeName': hostname}, callback
-    @remove_deploy_request hostname
 
   # Public: Run a job on Jenkins
   #
@@ -70,57 +197,18 @@ class Jenkins
   # Returns nothing
   run_job: (job, parameters, callback) ->
     safe_params = @safe_url_params parameters
-    path = "#{@url}/job/#{job}/buildWithParameters?#{safe_params}"
-    console.log("Requesting Jenkins' job at #{path}")
+
+    console.log "Jenkins #{job} triggered with #{safe_params}"
+
+    request = http.create(@url)
+      .path("job/#{job}/buildWithParameters?#{safe_params}")
+      .header('Content-Length', 0)
+
+    if process.env.HUBOT_JENKINS_AUTH
+      auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
+      request.header('Authorization', "Basic #{auth}")
     
-    request = @robot.http(path)
-    request.header('Content-Length', 0)
-    @add_auth_header(request) if process.env.HUBOT_JENKINS_AUTH
-
     request.post() callback
-
-  # Public: Lists all of the previously requested hosts
-  #
-  # Returns an array of host strings
-  list_hosts: ->
-    cache = @deployment_cache
-    for host of cache
-      host
-
-  deployment_cache: ->
-    @robot.brain.get('jenkins-deployments') || {}
-
-  # Internal: Cache this request for destroy/redeploy
-  #
-  # params - the original parameters used
-  # callback - the origin callback used
-  #
-  # Returns nothing
-  store_deploy_request: (params, callback) ->
-    hostname = params['HOST_NAME']
-    cache = @deployment_cache
-    cache[hostname] = { parameters: params, callback: callback }
-    @robot.brain.set 'jenkins-deployments', cache
-    @robot.brain.save
-
-  # Intenral: Retrieve the parameters and callback for a hostname
-  #
-  # hostname - a hostname to retrieve
-  #
-  # Returns the stored values
-  get_deploy_request: (hostname) ->
-    @deployment_cache[hostname]
-
-  # Internal: Remove cached request
-  #
-  # hostname - the hostname to remove from cache
-  #
-  # Returns nothing
-  remove_deploy_request: (hostname) ->
-    cache = @deployment_cache
-    delete cache[hostname]
-    @robot.brain.set 'jenkins-deployments', cache
-    @robot.brain.save
 
   # Internal: Generate a transaction key
   #
@@ -128,22 +216,13 @@ class Jenkins
   transaction_key: ->
     Date.now()
 
-  # Internal: Add Auth to the headers
-  #
-  # request - the HTTP request object
-  #
-  # Returns nothing
-  add_auth_header: (request) ->
-    auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
-    request.headers Authorization: "Basic #{auth}"
-
   # Internal: Make key/value paramaters URL safe
   #
   # parameters - key/value pairs
   #
   # Returns a URL safe string of parameters
   safe_url_params: (parameters) ->
-    querystring.stringify(parameters)
+    querystring.stringify parameters
 
 # Internal: A list of responses for Hubot to use
 confirmative = ["If that's what you want",
@@ -170,7 +249,7 @@ defaults =
 # grouped_matches - Hubot matches as an object
 #
 # Returns a host name as a String
-makeHostName = (grouped_matches) ->
+create_host_name = (grouped_matches) ->
   rtopia = grouped_matches['rtopia'] || ""
   ptopia = grouped_matches['liftopia.com'] || ""
   filtered_array = [rtopia, ptopia].filter (val) -> val.length
@@ -191,8 +270,8 @@ deployment_parameters = (matched_string) ->
     memo
 
   cleaned_matches = _.inject(matched_string.split(' '), iterator, {})
-  host_name = cleaned_matches['host_name'] || makeHostName(cleaned_matches)
-  parameters = _.defaults(cleaned_matches, defaults)
+  host_name = cleaned_matches['host_name'] || create_host_name cleaned_matches
+  parameters = _.defaults cleaned_matches, defaults
 
   ptopia = parameters['liftopia.com']
   rtopia = parameters['rtopia']
@@ -207,58 +286,86 @@ deployment_parameters = (matched_string) ->
 # params - an object containing the parameters to use
 #
 # Returns a boolean
-verify_hostname = (hostname)->
+validate_hostname = (hostname) ->
   errors = []
   if hostname.length > 30
-    errors.push("Host name: #{hostname} is too long.")
+    errors.push "Host name: #{hostname} is too long."
   errors
 
-acknowledge = (message) ->
-  phrase = message.random(confirmative)
-  punct = message.random(punctuation)
-  message.send "#{phrase}#{punct}"
-
-# Internal: Kick off the deployment job
+# Internal: Acknowledge the command with a random phrase
 #
-# jenkins - instance of the Jenkins class
 # message - Hubot message
 #
 # Returns nothing
-deploy = (jenkins, message) ->
-  mention = "@#{message.message.user.mention_name}"
-  params = deployment_parameters(message.match[1])
-  hostname = params['HOST_NAME']
-  validation_errors = verify_hostname hostname
+acknowledge = ->
+  phrase    = random confirmative
+  punct     = random punctuation
+  "#{phrase}#{punct}"
 
-  if validation_errors.length == 0
-    jenkins.deploy params, (err, res, body) ->
-      if res.statusCode == 302
-        branch_url = "http://#{hostname}.liftopia.nu"
-        message.send "#{mention}, your branch should be available at #{branch_url}"
-      else
-        response = if err then err else body
-        message.send "Uh oh, something happened: #{response}"
-  else
-    message.send "Deployment aborted due to errors!"
-    message.send validation_errors.join("\r\n")
+# Internal: Get a random array element
+#
+# arr - an array
+#
+# Return a value
+random = (arr) ->
+  arr[Math.floor(Math.random()*arr.length)]
 
-# Internal: Request the host be destroyed
+# Internal: Get user's hipchat name from message
 #
-# jenkins - instance of Jenkins
-# hostname - which hostname to destroy
+# message - Hubot message obj
 #
-# Returns nothing
-destroy = (jenkins, hostname, message) ->
-  jenkins.destroy hostname, (err, res, body) ->
-    if res.statusCode == 302
-      acknowledge(message)
-    else
-      response = err || body
-      message.send "Uh oh, something happened: #{response}"
+# Returns a string
+from_who = (message) ->
+  message.message.user.mention_name
+
+# Internal: Get the user id from the current message
+#
+# message - Hubot message obj
+#
+# Returns an int
+user_id_from = (message) ->
+  message.message.user.id
 
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
-  jenkins = new Jenkins(robot)
+  # Spectators and store initialization
+  spect_store  = new Storage(robot, 'watchers')
+  spectators   = new Spectators(spect_store)
+
+  # Jenkins, store, and event initialization
+  deploy_store = new Storage(robot, 'deployments')
+  jenkins      = new Jenkins(robot)
+
+  # Notify spectators of a deployment
+  robot.on 'jenkins:deploy', (event) ->
+    hostname = event.hostname
+    console.log "#{hostname} was deployed."
+    watchers = spectators.watching hostname
+    console.log " -> has #{watchers.length} watchers: #{watchers.join(', ')}"
+    _.each watchers, (user_id) ->
+      user = robot.brain.userForId user_id
+      robot.send user, "#{feature_url(hostname)} has been updated."
+
+  robot.on 'jenkins:destroy', (event) ->
+    hostname = event.hostname
+    console.log "#{hostname} was deleted."
+    spectators.clear hostname
+
+  # Listen for Jenkins' to tell us when he has deployment
+  robot.router.get '/jenkins/deployed/:hostname', (req, res) ->
+    host = req.params.hostname
+   
+  # Allow users to be notified of specific deployments
+  robot.respond /I(?:'m)? watch(?:ing)? (.*)/i, (msg) ->
+    whom = user_id_from msg
+    spectators.watch msg.match[1], whom
+    msg.send acknowledge()
+
+  # Let users forget about a deployment
+  robot.respond /(fuhgeddaboud|forget) (.*)/i, (msg) ->
+    whom = user_id_from msg
+    spectators.forget msg.match[1], whom
+    msg.send acknowledge()
 
   # Returns a snarky remark
   robot.respond /deploy$/i, (msg) ->
@@ -270,26 +377,110 @@ module.exports = (robot) ->
       "Let me add that to my list of things not to do.",
       "Try again."]
 
+  # Destroy a feature server
   robot.respond /destroy (.+)/i, (msg) ->
-    destroy(jenkins, msg.match[1], msg)
+    destroy msg
 
+  # Deploy using the previous options
   robot.respond /redeploy (.+)/i, (msg) ->
-    acknowledge(msg)
-    hostname = msg.match[1]
-    success = jenkins.redeploy(hostname)
-    if success == false
-      msg.send "Unfortunately I have no record of #{hostname} in my brain."
+    redeploy msg
 
+  # Deploy our feature server
   robot.respond /deploy (.+)/i, (msg) ->
-    acknowledge(msg)
-    deploy(jenkins, msg)
+    deploy msg
 
-  robot.respond /list deployments/i, (msg) ->
-    hosts = jenkins.list_hosts()
+  # List all known deployments
+  robot.respond /(?:list|get)?\s?deployments/i, (msg) ->
+    hosts = deploy_store.keys()
     if hosts.length > 0
       host_list = for i, host of hosts
         "#{parseInt(i) + 1}) #{host}"
       host_string = host_list.join("\r\n")
       msg.send "These are the ones I'm aware of:\n#{host_string}"
     else
-      msg.send "There are none, you should do some work and try again later."
+      response = random(["There are none, you might want to fix that.",
+        "Empty.",
+        "(crickets)",
+        "You've got to deploy something first.",
+        "There aren't any, get to work!"])
+      msg.send response
+     
+  # Internal: Kick off the deployment job
+  #
+  # message - Hubot message
+  #
+  # Returns nothing
+  deploy = (message) ->
+    params   = deployment_parameters message.match[1]
+    hostname = params['HOST_NAME']
+  
+    validation_errors = validate_hostname hostname
+  
+    if validation_errors.length == 0
+      message.send acknowledge()
+      deploy_store.put hostname, params
+
+      jenkins.deploy params, generic_callback( ->
+        whom = from_who message
+        orwell_track('deploy', whom, {hostname: hostname})
+        url = feature_url hostname
+        message.send "@#{whom}, your branch is at #{url}"
+      )
+    else
+      message.send "Deployment aborted due to errors!"
+      message.send validation_errors.join("\r\n")
+  
+  # Internal: Trigger a Jenkins' redeployment
+  #
+  # message - the Hubot message object
+  #
+  # Returns nothing
+  redeploy = (message) ->
+    hostname = message.match[1]
+
+    params = deploy_store.get hostname
+
+    if params
+      message.send acknowledge()
+
+      jenkins.deploy params, generic_callback( ->
+        whom = from_who message
+        orwell_track 'redeploy', whom, {hostname: hostname}
+        message.send "@#{whom}, I'm redeploying to #{feature_url(hostname)}"
+      )
+    else
+      message.send "I wasn't able to find a record for #{hostname}"
+  
+  # Internal: Request the host be destroyed
+  #
+  # hostname - which hostname to destroy
+  #
+  # Returns nothing
+  destroy = (message) ->
+    hostname = message.match[1]
+    deploy_store.remove hostname
+    remarks = ["Let's watch the world burn!",
+      "Target eliminated.",
+      "Extinguished.",
+      "You're sick!  What if he had a family...",
+      "This is the best part of my job!",
+      "click. click. (boom)"]
+  
+    jenkins.destroy hostname, generic_callback( ->
+      whom = from_who message
+      orwell_track 'destroy', whom, {hostname: hostname}
+      message.send random(remarks)
+    )
+  
+  # Internal: Generic callback for Jenkins' requests
+  #
+  # success - a more specific success callback
+  #
+  # Returns a function
+  generic_callback = (success) ->
+    (err, res, body) ->
+      if res.statusCode == 302
+        success()
+      else
+        response = err || body
+        console.log "Something unexpected occured: #{response}"
