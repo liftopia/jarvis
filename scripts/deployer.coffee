@@ -344,7 +344,7 @@ module.exports = (robot) ->
     console.log " -> has #{watchers.length} watchers: #{watchers.join(', ')}"
     _.each watchers, (user_id) ->
       user = robot.brain.userForId user_id
-      robot.send user, "#{feature_url(hostname)} has been updated."
+      robot.send {user: user}, "#{feature_url(hostname)} has been updated."
 
   robot.on 'jenkins:destroy', (event) ->
     hostname = event.hostname
