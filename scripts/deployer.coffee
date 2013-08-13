@@ -11,11 +11,13 @@
 #   HUBOT_JENKINS_AUTH
 #
 # Commands:
-#   hubot I'm watching    <hostname>
-#   hubot fuhgeddaboud    <hostname>
-#   hubot deploy          <hostname> <repo/branch> <repo/branch>
-#   hubot redeploy        <hostname>
-#   hubot destroy         <hostname>
+#   hubot I'm watching <hostname> - Receive a notification anytime this host is deployed
+#   hubot I watch <hostname> - Receive a notification anytime this host is deployed
+#   hubot forget <hostname> - No longer receive notifications for these deployments
+#   hubot fuhgeddaboud <hostname> - Ya ain't tryin' ta hear about it no mo
+#   hubot deploy <hostname> <repo/branch> <repo/branch> - Deploy a custom branch server
+#   hubot redeploy <hostname> - Re-trigger the last known deployment for this host
+#   hubot destroy <hostname> - Destroy the server
 #
 # Author:
 #   doomspork
@@ -63,7 +65,7 @@ orwell_track = (action, user, details) ->
 class Storage
   # Public: Constructor
   #
-  # robot - hubot instance 
+  # robot - hubot instance
   # namespace - the namespace for this storage instance
   #
   # Returns an instance
@@ -139,8 +141,8 @@ class Spectators
   forget: (hostname, user) ->
     watchers = @watching(hostname)
     index = watchers.indexOf(user)
-    if index > -1
-      delete watchers[index]
+    if index >= 0
+      delete watchers[user_id]
       @store.put(hostname, watchers)
 
   # Public: Get the list of spectators
@@ -314,17 +316,9 @@ random = (arr) ->
 #
 # message - Hubot message obj
 #
-# Returns a string
+# Returns a Hubot user
 from_who = (message) ->
-  message.message.user.mention_name
-
-# Internal: Get the user id from the current message
-#
-# message - Hubot message obj
-#
-# Returns an int
-user_id_from = (message) ->
-  message.message.user.id
+  message.message.user
 
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
@@ -339,12 +333,10 @@ module.exports = (robot) ->
   # Notify spectators of a deployment
   robot.on 'jenkins:deploy', (event) ->
     hostname = event.hostname
-    console.log "#{hostname} was deployed."
     watchers = spectators.watching hostname
-    console.log " -> has #{watchers.length} watchers: #{watchers.join(', ')}"
-    _.each watchers, (user_id) ->
-      user = robot.brain.userForId user_id
-      robot.send {user: user}, "#{feature_url(hostname)} has been updated."
+    mentions = _.map watchers, (user) -> "@#{user}"
+
+    robot.messageRoom 'Development', "#{mentions.join(', ')} #{hostname} was deployed."
 
   robot.on 'jenkins:destroy', (event) ->
     hostname = event.hostname
@@ -357,14 +349,14 @@ module.exports = (robot) ->
    
   # Allow users to be notified of specific deployments
   robot.respond /I(?:'m)? watch(?:ing)? (.*)/i, (msg) ->
-    whom = user_id_from msg
-    spectators.watch msg.match[1], whom
+    whom = from_who msg
+    spectators.watch msg.match[1], whom.mention_name
     msg.send acknowledge()
 
   # Let users forget about a deployment
   robot.respond /(fuhgeddaboud|forget) (.*)/i, (msg) ->
-    whom = user_id_from msg
-    spectators.forget msg.match[1], whom
+    whom = from_who msg
+    spectators.forget msg.match[1], whom.mention_name
     msg.send acknowledge()
 
   # Returns a snarky remark
@@ -422,9 +414,9 @@ module.exports = (robot) ->
 
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
-        orwell_track('deploy', whom, {hostname: hostname})
+        orwell_track('deploy', whom.name, {hostname: hostname})
         url = feature_url hostname
-        message.send "@#{whom}, your branch is at #{url}"
+        message.send "@#{whom.mention_name}, your branch is at #{url}"
       )
     else
       message.send "Deployment aborted due to errors!"
@@ -445,8 +437,8 @@ module.exports = (robot) ->
 
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
-        orwell_track 'redeploy', whom, {hostname: hostname}
-        message.send "@#{whom}, I'm redeploying to #{feature_url(hostname)}"
+        orwell_track 'redeploy', whom.name, {hostname: hostname}
+        message.send "@#{whom.mention_name}, I'm redeploying to #{feature_url(hostname)}"
       )
     else
       message.send "I wasn't able to find a record for #{hostname}"
@@ -468,7 +460,7 @@ module.exports = (robot) ->
   
     jenkins.destroy hostname, generic_callback( ->
       whom = from_who message
-      orwell_track 'destroy', whom, {hostname: hostname}
+      orwell_track 'destroy', whom.name, {hostname: hostname}
       message.send random(remarks)
     )
   
