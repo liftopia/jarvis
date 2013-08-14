@@ -57,9 +57,9 @@ orwell_track = (action, user, details) ->
     .path('v1/track')
     .post(post_data) (err, resp, body) ->
       if resp.statusCode == 200
-        console.log('Successfully tracked action with Orwell')
+        console.log 'Successfully tracked action with Orwell'
       else
-        console.log("Error communicating with Orwell: #{body}")
+        console.log "Error communicating with Orwell: #{body}"
 
 # Abstract Hubot brain
 class Storage
@@ -127,10 +127,10 @@ class Spectators
   #
   # Returns nothing
   watch: (hostname, user) ->
-    watchers = @watching(hostname)
-    if watchers.indexOf(user) == -1
-      watchers.push(user)
-      @store.put(hostname, watchers)
+    watchers = @watching hostname
+    if watchers.indexOf(user.id) == -1
+      watchers.push user.id
+      @store.put hostname, watchers
 
   # Public: Remove a user from the list of spectators for a hostname
   #
@@ -139,11 +139,11 @@ class Spectators
   #
   # Returns nothing
   forget: (hostname, user) ->
-    watchers = @watching(hostname)
-    index = watchers.indexOf(user)
+    watchers = @watching hostname
+    index = watchers.indexOf user.id
     if index >= 0
-      delete watchers[user_id]
-      @store.put(hostname, watchers)
+      delete watchers[index]
+      @store.put hostname, watchers
 
   # Public: Get the list of spectators
   #
@@ -177,7 +177,6 @@ class Jenkins
   #
   # Returns nothing
   deploy: (parameters, callback) ->
-    @robot.emit 'jenkins:deploy', { hostname: parameters['HOST_NAME'] }
     @run_job 'ReleaseBranch', parameters, callback
 
   # Public: Destroy the deployment at a particular hostname
@@ -208,7 +207,7 @@ class Jenkins
 
     if process.env.HUBOT_JENKINS_AUTH
       auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
-      request.header('Authorization', "Basic #{auth}")
+      request.header 'Authorization', "Basic #{auth}"
     
     request.post() callback
 
@@ -252,10 +251,10 @@ defaults =
 #
 # Returns a host name as a String
 create_host_name = (grouped_matches) ->
-  rtopia = grouped_matches['rtopia'] || ""
-  ptopia = grouped_matches['liftopia.com'] || ""
+  rtopia         = grouped_matches['rtopia'] || ""
+  ptopia         = grouped_matches['liftopia.com'] || ""
   filtered_array = [rtopia, ptopia].filter (val) -> val.length
-  filtered_array.join('-')
+  filtered_array.join '-'
 
 # Internal: Create the hash of Jenkins' deployment parameters
 #
@@ -264,16 +263,16 @@ create_host_name = (grouped_matches) ->
 # Returns a hash of parameters
 deployment_parameters = (matched_string) ->
   iterator = (memo, str) ->
-    tokens = str.split('/')
+    tokens = str.split '/'
     if tokens.length > 1
       memo[tokens[0]] = tokens[1]
     else
       memo['host_name'] = tokens[0]
     memo
 
-  cleaned_matches = _.inject(matched_string.split(' '), iterator, {})
-  host_name = cleaned_matches['host_name'] || create_host_name cleaned_matches
-  parameters = _.defaults cleaned_matches, defaults
+  cleaned_matches = _.inject matched_string.split(' '), iterator, {}
+  host_name       = cleaned_matches['host_name'] || create_host_name cleaned_matches
+  parameters      = _.defaults cleaned_matches, defaults
 
   ptopia = parameters['liftopia.com']
   rtopia = parameters['rtopia']
@@ -323,20 +322,24 @@ from_who = (message) ->
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
   # Spectators and store initialization
-  spect_store  = new Storage(robot, 'watchers')
-  spectators   = new Spectators(spect_store)
+  spect_store  = new Storage robot, 'watchers'
+  spectators   = new Spectators spect_store
 
   # Jenkins, store, and event initialization
-  deploy_store = new Storage(robot, 'deployments')
-  jenkins      = new Jenkins(robot)
+  deploy_store = new Storage robot, 'deployments'
+  jenkins      = new Jenkins robot
 
   # Notify spectators of a deployment
   robot.on 'jenkins:deploy', (event) ->
     hostname = event.hostname
     watchers = spectators.watching hostname
-    mentions = _.map watchers, (user) -> "@#{user}"
-
-    robot.messageRoom 'Development', "#{mentions.join(', ')} #{hostname} was deployed."
+    _.each watchers, (user_id) ->
+      user          = robot.brain.userForId user_id
+      envelope      = {}
+      envelope.user = user
+      # The reply_to value takes priority and it's usually the room
+      delete envelope.user.reply_to
+      robot.send envelope, "#{feature_url hostname} has been deployed."
 
   robot.on 'jenkins:destroy', (event) ->
     hostname = event.hostname
@@ -344,19 +347,27 @@ module.exports = (robot) ->
     spectators.clear hostname
 
   # Listen for Jenkins' to tell us when he has deployment
-  robot.router.get '/jenkins/deployed/:hostname', (req, res) ->
-    host = req.params.hostname
-   
+  robot.router.post '/jenkins/branch_release', (req, res) ->
+    res.end('')
+    try
+      data = req.body
+      if data.build.phase == 'FINISHED' and data.build.status == 'SUCCESS'
+        hostname = data.build.parameters.HOST_NAME
+        robot.emit 'jenkins:deploy', { hostname: hostname }
+    catch error
+      console.log "jenkins-notify error: #{error}. Data: #{req.body}"
+      console.log error.stack
+
   # Allow users to be notified of specific deployments
   robot.respond /I(?:'m)? watch(?:ing)? (.*)/i, (msg) ->
     whom = from_who msg
-    spectators.watch msg.match[1], whom.mention_name
+    spectators.watch msg.match[1], whom
     msg.send acknowledge()
 
   # Let users forget about a deployment
   robot.respond /(fuhgeddaboud|forget) (.*)/i, (msg) ->
     whom = from_who msg
-    spectators.forget msg.match[1], whom.mention_name
+    spectators.forget msg.match[1], whom
     msg.send acknowledge()
 
   # Returns a snarky remark
@@ -379,6 +390,8 @@ module.exports = (robot) ->
 
   # Deploy our feature server
   robot.respond /deploy (.+)/i, (msg) ->
+    whom = from_who msg
+    spectators.watch msg.match[1], whom
     deploy msg
 
   # List all known deployments
@@ -414,13 +427,11 @@ module.exports = (robot) ->
 
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
-        orwell_track('deploy', whom.name, {hostname: hostname})
-        url = feature_url hostname
-        message.send "@#{whom.mention_name}, your branch is at #{url}"
+        orwell_track 'deploy', whom.name, { hostname: hostname }
       )
     else
       message.send "Deployment aborted due to errors!"
-      message.send validation_errors.join("\r\n")
+      message.send validation_errors.join "\r\n"
   
   # Internal: Trigger a Jenkins' redeployment
   #
@@ -429,16 +440,15 @@ module.exports = (robot) ->
   # Returns nothing
   redeploy = (message) ->
     hostname = message.match[1]
-
-    params = deploy_store.get hostname
+    params   = deploy_store.get hostname
 
     if params
       message.send acknowledge()
 
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
-        orwell_track 'redeploy', whom.name, {hostname: hostname}
-        message.send "@#{whom.mention_name}, I'm redeploying to #{feature_url(hostname)}"
+        orwell_track 'redeploy', whom.name, { hostname: hostname }
+        message.send "@#{whom.mention_name}, I'm redeploying to #{feature_url hostname}"
       )
     else
       message.send "I wasn't able to find a record for #{hostname}"
@@ -460,7 +470,7 @@ module.exports = (robot) ->
   
     jenkins.destroy hostname, generic_callback( ->
       whom = from_who message
-      orwell_track 'destroy', whom.name, {hostname: hostname}
+      orwell_track 'destroy', whom.name, { hostname: hostname }
       message.send random(remarks)
     )
   
