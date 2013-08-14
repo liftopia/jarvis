@@ -391,7 +391,6 @@ module.exports = (robot) ->
   # Deploy our feature server
   robot.respond /deploy (.+)/i, (msg) ->
     whom = from_who msg
-    spectators.watch msg.match[1], whom
     deploy msg
 
   # List all known deployments
@@ -418,10 +417,12 @@ module.exports = (robot) ->
   deploy = (message) ->
     params   = deployment_parameters message.match[1]
     hostname = params['HOST_NAME']
-  
+ 
     validation_errors = validate_hostname hostname
   
     if validation_errors.length == 0
+      spectators.watch hostname, from_who(message)
+
       message.send acknowledge()
       deploy_store.put hostname, params
 
@@ -444,6 +445,8 @@ module.exports = (robot) ->
 
     if params
       message.send acknowledge()
+      
+      spectators.watch hostname, from_who(message)
 
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
