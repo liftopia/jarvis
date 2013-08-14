@@ -451,7 +451,6 @@ module.exports = (robot) ->
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
         orwell_track 'redeploy', whom.name, { hostname: hostname }
-        message.send "@#{whom.mention_name}, I'm redeploying to #{feature_url hostname}"
       )
     else
       message.send "I wasn't able to find a record for #{hostname}"
