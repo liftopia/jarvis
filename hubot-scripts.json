@@ -17,5 +17,6 @@
   "whoisout.coffee",
   "chat.coffee",
   "hello.coffee",
-  "lolz.coffee"
+  "lolz.coffee",
+  "announce.coffee"
 ]

@@ -55,6 +55,8 @@ orwell_track = (action, user, details) ->
 
   http.create('http://api.orwell.io')
     .path('v1/track')
+    .header('Content-Type', 'application/x-www-form-urlencoded')
+    .header('Content-Length', post_data.length)
     .post(post_data) (err, resp, body) ->
       if resp.statusCode == 200
         console.log 'Successfully tracked action with Orwell'
