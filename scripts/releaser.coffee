@@ -44,12 +44,12 @@ class Releaser
   #
   # Returns nothing
   run_job: (job, callback) ->
-    path = "#{@url}/job/#{job}/buildWithParameters"
+    path = "#{@url}/job/#{job}/buildWithParameters?token=dfc0b2ead4a57bc60097286eec01a336"
     console.log("Requesting Jenkins' job at #{path}")
-    
+
     request = @robot.http(path)
     request.header('Content-Length', 0)
-    @add_auth_header(request) if process.env.HUBOT_JENKINS_AUTH
+    #@add_auth_header(request) if process.env.HUBOT_JENKINS_AUTH
 
     request.post() callback
 

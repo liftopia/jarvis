@@ -204,13 +204,13 @@ class Jenkins
     console.log "Jenkins #{job} triggered with #{safe_params}"
 
     request = http.create(@url)
-      .path("job/#{job}/buildWithParameters?#{safe_params}")
+      .path("job/#{job}/buildWithParameters?token=dfc0b2ead4a57bc60097286eec01a336&#{safe_params}")
       .header('Content-Length', 0)
 
-    if process.env.HUBOT_JENKINS_AUTH
-      auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
-      request.header 'Authorization', "Basic #{auth}"
-    
+    #if process.env.HUBOT_JENKINS_AUTH
+    #  auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
+    #  request.header 'Authorization', "Basic #{auth}"
+
     request.post() callback
 
   # Internal: Generate a transaction key
