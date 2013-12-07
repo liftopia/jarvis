@@ -246,6 +246,7 @@ punctuation  = ['.', '!', '...']
 defaults =
   'rtopia':        'develop'
   'liftopia.com':  'develop'
+  'moneta':        'http://assets-beta.liftopia.com/moneta'
 
 # Intenral: Create a unique host name
 #
@@ -276,13 +277,18 @@ deployment_parameters = (matched_string) ->
   host_name       = cleaned_matches['host_name'] || create_host_name cleaned_matches
   parameters      = _.defaults cleaned_matches, defaults
 
+  if defaults['moneta'] != parameters['moneta']
+    parameters['moneta'] = "http://assets-beta.liftopia.com/branches/moneta/" + parameters['moneta']
+
   ptopia = parameters['liftopia.com']
   rtopia = parameters['rtopia']
+  moneta = parameters['moneta']
 
   url_params =
     'HOST_NAME': host_name
     'RTOPIA_BRANCH': rtopia
     'PTOPIA_BRANCH': ptopia
+    'MONETA_PATH': moneta
 
 # Internal: Check some things before we fire off a Jenkins' job
 #
