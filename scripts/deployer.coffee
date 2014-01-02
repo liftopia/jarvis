@@ -36,33 +36,6 @@ BRANCH_DOMAIN = 'liftopia.nu'
 feature_url = (hostname) ->
   "http://#{hostname}.#{BRANCH_DOMAIN}"
 
-# Internal: MUHAHAHA!  Helper method for tracking actions in Orwell
-#
-# action  - the action that occurred
-# user    - the user's name
-# details - any additional data
-#
-# Returns nothing
-orwell_track = (action, user, details) ->
-  data =
-    token:        'ge0XVpMpqwZWg2UjwNCaweisJhjuu6Xgzi93PnKO'
-    channel:      'jarvis'
-    action:       action
-    distinct_id:  user
-    details:      details
-
-  post_data = querystring.stringify(data)
-
-  http.create('http://api.orwell.io')
-    .path('v1/track')
-    .header('Content-Type', 'application/x-www-form-urlencoded')
-    .header('Content-Length', post_data.length)
-    .post(post_data) (err, resp, body) ->
-      if resp.statusCode == 200
-        console.log 'Successfully tracked action with Orwell'
-      else
-        console.log "Error communicating with Orwell: #{body}"
-
 # Abstract Hubot brain
 class Storage
   # Public: Constructor
@@ -430,7 +403,6 @@ module.exports = (robot) ->
 
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
-        orwell_track 'deploy', whom.name, { hostname: hostname }
       )
     else
       message.send "Deployment aborted due to errors!"
@@ -452,7 +424,6 @@ module.exports = (robot) ->
 
       jenkins.deploy params, generic_callback( ->
         whom = from_who message
-        orwell_track 'redeploy', whom.name, { hostname: hostname }
       )
     else
       message.send "I wasn't able to find a record for #{hostname}"
@@ -474,7 +445,6 @@ module.exports = (robot) ->
   
     jenkins.destroy hostname, generic_callback( ->
       whom = from_who message
-      orwell_track 'destroy', whom.name, { hostname: hostname }
       message.send random(remarks)
     )
   
