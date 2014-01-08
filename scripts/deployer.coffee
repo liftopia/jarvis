@@ -278,7 +278,10 @@ deployment_parameters = (matched_string) ->
   parameters      = _.defaults cleaned_matches, defaults
 
   if defaults['moneta'] != parameters['moneta']
-    parameters['moneta'] = "http://assets-beta.liftopia.com/branches/moneta/" + parameters['moneta']
+    if parameters['moneta'] == 'develop'
+      parameters['moneta'] = 'http://assets-dev.liftopia.com/moneta'
+    else
+      parameters['moneta'] = "http://assets-beta.liftopia.com/branches/moneta/" + parameters['moneta']
 
   ptopia = parameters['liftopia.com']
   rtopia = parameters['rtopia']
