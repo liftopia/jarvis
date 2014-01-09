@@ -26,7 +26,7 @@ querystring = require 'querystring'
 _           = require 'underscore'
 http        = require 'scoped-http-client'
 
-BRANCH_DOMAIN = 'liftopia.nu'
+BRANCH_DOMAIN = 'liftopia.net'
 
 # Internal: Get the url for a hostname
 #
