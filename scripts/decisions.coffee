@@ -15,7 +15,7 @@
 #   mrtazz coin.coffee
 
 thecoin = ["heads", "tails"]
-decisions = [
+yesno = [
   "Signs point to yes.",
   "Yes.",
   "Reply hazy, try again.",
@@ -26,7 +26,7 @@ decisions = [
   "Concentrate and ask again.",
   "Outlook not so good.",
   "It is decidedly so.",
-  "Better not tell you now. ",
+  "Better not tell you now.",
   "Very doubtful.",
   "Yes - definitely.",
   "It is certain. ",
@@ -43,4 +43,7 @@ module.exports = (robot) ->
     msg.reply msg.random thecoin
 
   robot.respond /decide for us/i, (msg) ->
-    msg.send msg.random decisions
+    msg.send msg.random yesno
+
+  robot.respond /will (.*)\?$/i, (msg) ->
+    msg.send msg.random yesno
