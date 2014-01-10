@@ -45,5 +45,5 @@ module.exports = (robot) ->
   robot.respond /decide for us/i, (msg) ->
     msg.send msg.random yesno
 
-  robot.respond /will (.*)\?$/i, (msg) ->
+  robot.respond /(will|is) (.*)\?$/i, (msg) ->
     msg.send msg.random yesno
