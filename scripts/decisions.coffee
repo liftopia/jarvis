@@ -8,7 +8,9 @@
 #   None
 #
 # Commands:
-#   hubot throw flip toss a coin - Gives you heads or tails
+#   hubot throw a coin  - Gives you heads or tails
+#   hubot flip a coin   - Gives you heads or tails
+#   hubot toss a coin   - Gives you heads or tails
 #   hubot decide for us - makes a decision
 #
 # Credits:
@@ -38,9 +40,26 @@ yesno = [
   "Don't count on it."
 ]
 
+sassy = [
+  "Meh",
+  "I'm not so sure...",
+  "Let's revisit this tomorrow.",
+  "When in doubt, go fast!",
+  "Go with your gut.",
+  "Be water.",
+  "Yeah, sure...",
+  "Whatevs.",
+  "Ha! Hell to the no.",
+  "Yeah right.",
+  "Talk to the hand."
+]
+
 module.exports = (robot) ->
   robot.respond /(throw|flip|toss) a coin/i, (msg) ->
     msg.reply msg.random thecoin
+
+  robot.respond /should (we|i) (do|try)?/i, (msg) ->
+    msg.send msg.random sassy
 
   robot.respond /decide for us/i, (msg) ->
     msg.send msg.random yesno
