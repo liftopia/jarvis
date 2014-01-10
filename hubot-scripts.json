@@ -10,6 +10,7 @@
   "do-it-live.coffee",
   "kittens.coffee",
   "pagerduty.coffee",
+  "snow.coffee",
   "sprintly.coffee",
   "tell.coffee",
   "twitter.coffee",
