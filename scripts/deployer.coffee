@@ -161,7 +161,6 @@ class Jenkins
   #
   # Returns nothing
   destroy: (hostname, callback) ->
-    @robot.emit 'jenkins:destroy', { hostname: hostname }
     @run_job 'DestroyBranchHost', {'NodeName': hostname}, callback
 
   # Public: Run a job on Jenkins
@@ -329,18 +328,19 @@ module.exports = (robot) ->
     hostname = event.hostname
     console.log "#{hostname} was deleted."
     spectators.clear hostname
+    deploy_store.clear hostname
 
   # Listen for Jenkins' to tell us when he has deployment
   robot.router.post '/jenkins/branch_release', (req, res) ->
-    res.end('')
-    try
-      data = req.body
-      if data.build.phase == 'FINISHED' and data.build.status == 'SUCCESS'
-        hostname = data.build.parameters.HOST_NAME
-        robot.emit 'jenkins:deploy', { hostname: hostname }
-    catch error
-      console.log "jenkins-notify error: #{error}. Data: #{req.body}"
-      console.log error.stack
+    jenkins_notification req, res, ->
+      hostname = data.build.parameters.HOST_NAME
+      robot.emit 'jenkins:deploy', { hostname: hostname }
+
+  # Listen to a notification that a branch was destroyed
+  robot.router.post '/jenkins/branch_destroy', (req, res) ->
+    jenkins_notification req, res, ->
+      hostname = data.build.parameters.NodeName
+      robot.emit 'jenkins:destroy', { hostname: hostname }
 
   # Allow users to be notified of specific deployments
   robot.respond /I(?:'m)? watch(?:ing)? (.*)/i, (msg) ->
@@ -444,7 +444,6 @@ module.exports = (robot) ->
   # Returns nothing
   destroy = (message) ->
     hostname = message.match[1]
-    deploy_store.remove hostname
     remarks = ["Let's watch the world burn!",
       "Target eliminated.",
       "Extinguished.",
@@ -469,3 +468,21 @@ module.exports = (robot) ->
       else
         response = err || body
         console.log "Something unexpected occured: #{response}"
+
+  # Internal: Handle Jenkins notifications
+  #
+  # req     - Request object
+  # res     - Response object
+  # success - the callback to be invoked on successful requests
+  #
+  # Returns nothing 
+  jenkins_notification = (req, res, success) ->
+    res.end('')
+    try
+      data = req.body
+      if data.build.phase == 'FINISHED' and data.build.status == 'SUCCESS'
+        success()
+    catch error
+      console.log "jenkins-notify error: #{error}. Data: #{req.body}"
+      console.log error.stack
+
