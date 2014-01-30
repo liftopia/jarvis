@@ -1,22 +1,22 @@
 [
-  "tweet.coffee",
-  "shipit.coffee",
   "ackbar.coffee",
   "applause.coffee",
   "availability.coffee",
   "beeradvocate.coffee",
-  "github-status.coffee",
+  "chat.coffee",
   "commitmessage.coffee",
   "do-it-live.coffee",
+  "github-status.coffee",
+  "hello.coffee",
+  "karma.coffee",
   "kittens.coffee",
+  "lolz.coffee",
+  "mongo-brain.coffee",
   "pagerduty.coffee",
+  "shipit.coffee",
   "snow.coffee",
-  "sprintly.coffee",
   "tell.coffee",
   "twitter.coffee",
   "wat.coffee",
-  "whoisout.coffee",
-  "chat.coffee",
-  "hello.coffee",
-  "lolz.coffee"
-]
+  "whoisout.coffee"
+  ]
