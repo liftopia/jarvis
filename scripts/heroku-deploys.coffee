@@ -17,8 +17,9 @@
 
 class KeyValueStore
   constructor: (@namespace, @robot) ->
+    @cache = {}
     @robot.brain.on 'loaded', =>
-      @cache = @robot.brain.get(@namespace) || {}
+      @cache = @robot.brain.get(@namespace) || @cache
 
   save = ->
     @robot.brain.set(@namespace, @cache)
@@ -47,7 +48,7 @@ module.exports = (robot) ->
   robot.respond /heroku knows (app|user) (.*) as (.+)/i, (msg) ->
     collection = if (msg.match[1] == 'app') then app_store else user_store
     collection.add msg.match[3], msg.match[2]
-    msg.reply 'Got it.'
+    msg.send msg.random ['You got it', '(thumbsup)', 'Sure', 'Always excited to help out', 'Roger that']
 
   robot.router.post '/heroku/deploy', (req, res) ->
     res.send('')
@@ -55,6 +56,10 @@ module.exports = (robot) ->
     heroku_user = req.body.user
     app         = app_store.get(heroku_app)   || heroku_app
     user        = user_store.get(heroku_user) || heroku_user
+    event       =
+      message: "#{app} was leveled up by #{user}!"
+      profile: 'deploy'
 
     rooms.forEach (room) ->
-      robot.messageRoom room, "#{app} was leveled up by #{user}!"
+      event['room'] = room
+      robot.emit 'room_announce', event

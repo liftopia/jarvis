@@ -44,7 +44,7 @@ module.exports = (robot) ->
   recently_active = (rooms) ->
     day_ago = Math.round((new Date().getTime() - 4320000) / 1000)
     (room.room_id for room in rooms when room.last_active >= day_ago)
-  
+
   announce = (msg, profile, room) ->
     announcement_data = _.extend(profile, {message: msg, room_id: room})
     robot.http('https://api.hipchat.com/v1/rooms/message')
@@ -64,6 +64,22 @@ module.exports = (robot) ->
           room_ids = recently_active(json.rooms)
           success = true
         callback(success)
+
+  robot.on 'room_announce', (event) ->
+    room_id      = event.room
+    announcement = event.message
+    profile_name = event.profile || 'default'
+    profile      = profiles[profile_name]
+    announce(announcement, profile, room_id)
+
+  robot.on 'announce', (event) ->
+    announcement = event.message
+    profile_name = event.profile || 'default'
+    profile      = profiles[profile_name]
+    active_rooms (success) ->
+      if success
+        for room_id in room_ids
+          announce(announcement, profile, room_id)
 
   robot.respond /announce (\w*)?\s?"(.*)"/i, (msg) ->
     active_rooms (success) ->
