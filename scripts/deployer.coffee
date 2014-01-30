@@ -328,17 +328,17 @@ module.exports = (robot) ->
     hostname = event.hostname
     console.log "#{hostname} was deleted."
     spectators.clear hostname
-    deploy_store.clear hostname
+    deploy_store.remove hostname
 
   # Listen for Jenkins' to tell us when he has deployment
   robot.router.post '/jenkins/branch_release', (req, res) ->
-    jenkins_notification req, res, ->
+    jenkins_notification req, res, (data) ->
       hostname = data.build.parameters.HOST_NAME
       robot.emit 'jenkins:deploy', { hostname: hostname }
 
   # Listen to a notification that a branch was destroyed
   robot.router.post '/jenkins/branch_destroy', (req, res) ->
-    jenkins_notification req, res, ->
+    jenkins_notification req, res, (data) ->
       hostname = data.build.parameters.NodeName
       robot.emit 'jenkins:destroy', { hostname: hostname }
 
@@ -475,13 +475,13 @@ module.exports = (robot) ->
   # res     - Response object
   # success - the callback to be invoked on successful requests
   #
-  # Returns nothing 
+  # Returns nothing
   jenkins_notification = (req, res, success) ->
     res.end('')
     try
       data = req.body
       if data.build.phase == 'FINISHED' and data.build.status == 'SUCCESS'
-        success()
+        success(data)
     catch error
       console.log "jenkins-notify error: #{error}. Data: #{req.body}"
       console.log error.stack
