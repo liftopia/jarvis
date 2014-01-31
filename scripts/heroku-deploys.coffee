@@ -1,11 +1,60 @@
-module.exports = (robot) ->
-  room = '13693_development@chat.hipchat.com'
+# Description:
+#   Assign display names for Heroku apps and users
+#
+# Configuration:
+#   HEROKU_DEPLOY_ROOMS
+#
+# Commands:
+#   hubot heroku knows app <display name> as <name>      - assign a display name to a Heroku app
+#   hubot heroku knows user <display name> as <name>      - assign a display name to a Heroku app
+#
+# Examples:
+#   hubot heroku knows app Jarvïs Bötman as lift-jarvis
+#   hubot heroku knows user TestUser as user@test.com 
+#
+# Author:
+#   doomspork
 
-  app_map =
-    'lift-jarvis':   'Jarvïs Bötman'
-    'lift-rolodex':  'Rolodex'
+class KeyValueStore
+  constructor: (@namespace, @robot) ->
+    @robot.brain.on 'loaded', =>
+      @cache = @robot.brain.get(@namespace) || {}
+
+  save = ->
+    @robot.brain.set(@namespace, @cache)
+
+  add: (key, value) ->
+    @cache[key] = value
+    save.call @
+
+  remove: (key) ->
+    delete @cache[key]
+    save.call @
+
+  get: (key) ->
+    @cache[key]
+
+  clear: ->
+    @cache = []
+    save.call @
+
+rooms = (process.env.HEROKU_DEPLOY_ROOMS || '').split(',')
+
+module.exports = (robot) ->
+  app_store  = new KeyValueStore('heroku_apps', robot)
+  user_store = new KeyValueStore('heroku_users', robot)
+
+  robot.respond /heroku knows (app|user) (.*) as (.+)/i, (msg) ->
+    collection = if (msg.match[1] == 'app') then app_store else user_store
+    collection.add msg.match[3], msg.match[2]
+    msg.reply 'Got it.'
 
   robot.router.post '/heroku/deploy', (req, res) ->
-    app = app_map[req.body.app]
-    robot.messageRoom room, "#{app} was leveled up by #{req.body.user}!"
+    res.send('')
+    heroku_app  = req.body.app
+    heroku_user = req.body.user
+    app         = app_store.get(heroku_app)   || heroku_app
+    user        = user_store.get(heroku_user) || heroku_user
 
+    rooms.forEach (room) ->
+      robot.messageRoom room, "#{app} was leveled up by #{user}!"
