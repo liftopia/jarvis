@@ -253,7 +253,7 @@ deployment_parameters = (matched_string) ->
     if parameters['moneta'] == 'develop'
       parameters['moneta'] = 'https://s3.amazonaws.com/assets-dev.liftopia.com/moneta'
     else
-      parameters['moneta'] = "https://s3.amazonaws.com/assets-beta.liftopia.com/moneta/" + parameters['moneta']
+      parameters['moneta'] = "https://s3.amazonaws.com/assets-beta.liftopia.com/branches/moneta/" + parameters['moneta']
 
   ptopia = parameters['liftopia.com']
   rtopia = parameters['rtopia']
