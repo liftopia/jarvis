@@ -218,7 +218,7 @@ punctuation  = ['.', '!', '...']
 defaults =
   'rtopia':        'develop'
   'liftopia.com':  'develop'
-  'moneta':        'http://assets-beta.liftopia.com/moneta'
+  'moneta':        'https://s3.amazonaws.com/assets-beta.liftopia.com/moneta'
 
 # Intenral: Create a unique host name
 #
