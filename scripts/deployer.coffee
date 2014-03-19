@@ -144,7 +144,7 @@ class Jenkins
   # Returns a new Jenkins instance
   constructor: (@robot) ->
     @url = process.env.HUBOT_JENKINS_URL
-    
+
   # Public: Request a deployment
   #
   # parameters - an hash of key/value pairs to use as GET params
@@ -200,27 +200,28 @@ class Jenkins
     querystring.stringify parameters
 
 # Internal: A list of responses for Hubot to use
-confirmative = ["If that's what you want",
-  "I'm on it",
-  "You've got it",
-  "Affirmative",
-  "Roger that",
+confirmative = [
   "10-4",
-  "Copy that",
+  "Affirmative",
   "Anything for you",
+  "Copy that",
+  "I'm on it",
+  "If that's what you want",
+  "Roger that",
+  "Sure, that can be arranged"
   "With great pleasure",
   "Yeah",
-  "Sure, that can be arranged"]
+  "You've got it",
+]
 
 punctuation  = ['.', '!', '...']
 
 # Internal: Branch defaults for rtopia and liftopia.com
 defaults =
-  'rtopia':        'develop'
-  'liftopia.com':  'develop'
-  'moneta':        'https://s3.amazonaws.com/assets-beta.liftopia.com/moneta'
+  'rtopia':       'master'
+  'liftopia.com': 'master'
 
-# Intenral: Create a unique host name
+# Internal: Create a unique host name
 #
 # grouped_matches - Hubot matches as an object
 #
@@ -249,21 +250,13 @@ deployment_parameters = (matched_string) ->
   host_name       = cleaned_matches['host_name'] || create_host_name cleaned_matches
   parameters      = _.defaults cleaned_matches, defaults
 
-  if defaults['moneta'] != parameters['moneta']
-    if parameters['moneta'] == 'develop'
-      parameters['moneta'] = 'https://s3.amazonaws.com/assets-dev.liftopia.com/moneta'
-    else
-      parameters['moneta'] = "https://s3.amazonaws.com/assets-beta.liftopia.com/branches/moneta/" + parameters['moneta']
-
   ptopia = parameters['liftopia.com']
   rtopia = parameters['rtopia']
-  moneta = parameters['moneta']
 
   url_params =
     'HOST_NAME': host_name
     'RTOPIA_BRANCH': rtopia
     'PTOPIA_BRANCH': ptopia
-    'MONETA_PATH': moneta
 
 # Internal: Check some things before we fire off a Jenkins' job
 #
@@ -392,7 +385,7 @@ module.exports = (robot) ->
         "You've got to deploy something first.",
         "There aren't any, get to work!"])
       msg.send response
-     
+
   # Internal: Kick off the deployment job
   #
   # message - Hubot message
@@ -401,9 +394,9 @@ module.exports = (robot) ->
   deploy = (message) ->
     params   = deployment_parameters message.match[1]
     hostname = params['HOST_NAME']
- 
+
     validation_errors = validate_hostname hostname
-  
+
     if validation_errors.length == 0
       spectators.watch hostname, from_who(message)
 
@@ -416,7 +409,7 @@ module.exports = (robot) ->
     else
       message.send "Deployment aborted due to errors!"
       message.send validation_errors.join "\r\n"
-  
+
   # Internal: Trigger a Jenkins' redeployment
   #
   # message - the Hubot message object
@@ -428,7 +421,7 @@ module.exports = (robot) ->
 
     if params
       message.send acknowledge()
-      
+
       spectators.watch hostname, from_who(message)
 
       jenkins.deploy params, generic_callback( ->
@@ -436,7 +429,7 @@ module.exports = (robot) ->
       )
     else
       message.send "I wasn't able to find a record for #{hostname}"
-  
+
   # Internal: Request the host be destroyed
   #
   # hostname - which hostname to destroy
@@ -450,12 +443,12 @@ module.exports = (robot) ->
       "You're sick!  What if he had a family...",
       "This is the best part of my job!",
       "click. click. (boom)"]
-  
+
     jenkins.destroy hostname, generic_callback( ->
       whom = from_who message
       message.send random(remarks)
     )
-  
+
   # Internal: Generic callback for Jenkins' requests
   #
   # success - a more specific success callback
