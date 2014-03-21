@@ -8,11 +8,15 @@
 #   N/A
 #
 # Commands:
-#   hubot i'm deploying <repo> <pr#> - Flag yourself as deploying something
-#   hubot i'm next <repo> <pr#> - Flag yourself as deploying something soon
-#   hubot i'm done deploying - Let jarvis know you're done
+#   hubot I'm deploying <repo> <pr#> - Flag yourself as deploying something
+#   hubot I'm really deploying <repo> <pr#> - Bypass the on deck deployer
+#   hubot I'm next <repo> <pr#> - Flag yourself as deploying something soon
+#   hubot I'm done deploying - Let jarvis know you're done
 #   hubot who's next - Find out who's deploying next
 #   hubot (all|list) deployers - List all deployers
+#   hubot who's deploying - List all deployers
+#   hubot remove active deploy - Remove the currently active deploy in case of disappearance
+#   hubot cancel (my|<name>) deploys - Remove all deploys for target
 #
 # Author:
 #   amdtech
