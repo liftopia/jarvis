@@ -82,67 +82,65 @@ class Storage
 class Deployers
   constructor: (@store) ->
 
-  next: (repo, pull_request, user) ->
-    deployers = @deployers()
-    deployers.push { user: user, repo: repo, pull_request: pull_request }
-    @store.put 'deployers', deployers
+  next: (manifest) ->
+    manifests = @manifests()
+
+    manifests.push manifest
+    @store.put 'manifests', manifests
 
   on_deck: ->
-    deployers = @deployers()
-    deployers[0]
+    @manifests()[0]
 
-  activate: (repo, pull_request, user) ->
+  activate: (manifest) ->
     on_deck = @on_deck()
-    if on_deck is undefined
-      @store.put 'active', { user: user, repo: repo, pull_request: pull_request }
-      return true
 
-    if on_deck.repo == repo && on_deck.pull_request == pull_request && on_deck.user.id == user.id
-      deployers = @deployers()
-      @store.put 'active', deployers[0]
-      @store.put 'deployers', deployers.slice(1)
-      true
+    if on_deck is undefined
+      @store.put 'active', manifest
+    else if on_deck.user.id == manifest.user.id && on_deck.repo == manifest.repo && on_deck.pull_request == manifest.pull_request
+      manifests = @manifests()
+      @store.put 'manifests', manifests.slice(1)
+      @store.put 'active', manifest
     else
       false
 
-  force: (repo, pull_request, user) ->
-    deployer = { user: user, repo: repo, pull_request: pull_request }
-    @store.put 'active', deployer
-    @remove deployer
+  force: (manifest) ->
+    @store.put 'active', manifest
+    @remove manifest
 
-  remove: (deploy) ->
-    deployers = @deployers()
-    deployers_left = []
-    for deployer in deployers
-      unless deploy.user.id == deployer.user.id && deploy.repo == deployer.repo && deploy.pull_request == deployer.pull_request
-        deployers_left.push deployer
-    @store.put 'deployers', deployers_left
+  remove: (manifest) ->
+    manifests      = @manifests()
+    manifests_left = []
+
+    for man in manifests
+      unless man.user.id == manifest.user.id && man.repo == manifest.repo && man.pull_request == manifest.pull_request
+        manifests_left.push man
+
+    @store.put 'manifests', manifests_left
 
   active: ->
     @store.get('active') || undefined
 
   done: (user, force = false) ->
     active = @active()
-    if active.user.id == user.id || force
+    if active && (active.user.id == user.id || force)
       @store.remove('active')
-      true
+      active
     else
       false
 
   count: ->
-    deployers = @deployers()
-    deployers.length
+    @manifests().length
 
   clear: (user) ->
-    deployers = @deployers()
-    deployers_left = []
-    for deployer in deployers
-      unless user.id == deployer.user.id || user.name == deployer.user.name
-        deployers_left.push deployer
-    @store.put 'deployers', deployers_left
+    manifests = @manifests()
+    manifests_left = []
+    for manifest in manifests
+      unless user.id == manifest.user.id || user.name == manifest.user.name
+        manifests_left.push manifest
+    @store.put 'manifests', manifests_left
 
-  deployers: ->
-    @store.get('deployers') || []
+  manifests: ->
+    @store.get('manifests') || []
 
 # Internal: Get user's hipchat name from message
 #
@@ -152,119 +150,146 @@ class Deployers
 from_who = (message) ->
   message.message.user
 
+# Internal: Collect the information needed to track
+#
+# msg - Hubot message object
+# repo - Repository slug
+# pull_request - The Github PR ID
+#
+# Returns a manifest object
+# TODO: (amdtech) probably replace with class
+manifest_from = (msg, repo, pull_request) ->
+  user        : from_who msg
+  repo        : repo
+  pull_request: pull_request
+  slug        : "#{repo}/#{pull_request}"
+  url         : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
+
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
   # Deployers and store initialization
   deployer_store = new Storage robot, 'deployers'
   deployers      = new Deployers deployer_store
 
+  # Basic error handling for logging and notification of errors
+  robot.error (err, msg) ->
+    robot.logger.error err.stack
+    msg.reply "Whoops... check #{robot.name}'s logs :(" if msg?
+
   # Nicely set up next deployment
-  robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*(\w+)[\s\/]+(\d+)/i, (msg) ->
-    whom         = from_who msg
-    repo         = msg.match[1]
-    pull_request = msg.match[2]
-    if deployers.activate repo, pull_request, whom
-      msg.send whom.name + " is deploying " + msg.match[1] + "/" + msg.match[2]
+  robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
+    manifest = manifest_from msg, msg.match[1], msg.match[2]
+
+    if deployers.activate manifest
+      msg.reply "Deploying #{manifest.slug}"
+      robot.emit 'deploy-lock:deploying', manifest
     else
       on_deck = deployers.on_deck()
-      msg.send "negative. " + on_deck.user.name + " (" + on_deck.repo + "/" + on_deck.pull_request + ") is next."
+      msg.reply "Negative. #{on_deck.user.name} (#{on_deck.slug}) is next."
 
   # Bypass the next deployer
-  robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*(\w+)[\s\/]+(\d+)/i, (msg) ->
-    whom         = from_who msg
-    repo         = msg.match[1]
-    pull_request = msg.match[2]
+  robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
+    manifest = manifest_from msg, msg.match[1], msg.match[2]
+    active   = deployers.active()
+    on_deck  = deployers.on_deck()
 
-    active = deployers.active()
-    next = deployers.on_deck()
-    if active is undefined
-      msg.send "ok " + whom.name + " you're bypassing " + next.name
-      deployers.force repo, pull_request, whom
+    if active
+      msg.reply "Sorry, #{active.user.name} is currently deploying #{active.slug}."
     else
-      msg.send "sorry, " + active.user.name + " is currently deploying " + active.repo + "/" + active.pull_request
+      msg.reply "Ok, you're bypassing #{on_deck.user.name}." if on_deck
+      deployers.force manifest
+      msg.send "Deploy bypass active, #{manifest.user.name} has jumped the gun with #{manifest.slug}."
+      robot.emit 'deploy-lock:deploying', manifest
 
   # Add me to the list of deployers
-  robot.respond /i(?:'m)?\s*next\s*(\w+)[\s\/]+(\d+)/i, (msg) ->
-    whom         = from_who msg
-    repo         = msg.match[1]
-    pull_request = msg.match[2]
+  robot.respond /i(?:'m)?\s*next\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
+    manifest = manifest_from msg, msg.match[1], msg.match[2]
 
-    try
-      deployers.next repo, pull_request, whom
-      msg.send whom.name + " wants to deploy " + msg.match[1] + "/" + msg.match[2] + ". You're #" + deployers.count() + "."
-    catch error
-      msg.send "I can't do that " + whom.name
-      console.log "error adding new deployer"
-      console.log error.stack
+    deployers.next manifest
+    msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
+    robot.emit 'deploy-lock:next', manifest
 
   # Remove my deploy
   robot.respond /i(?:'m)?\s*done\s*deploying$/i, (msg) ->
-    whom = from_who msg
-    if deployers.done whom
-      msg.send whom.name + " is done deploying"
+    whom     = from_who msg
+    manifest = deployers.done whom
+
+    if manifest
+      msg.send "#{whom.name} is done deploying"
+      robot.emit 'deploy-lock:done', manifest
+
       on_deck = deployers.on_deck()
-      unless on_deck is undefined
-        msg.send on_deck.user.name + " is next with " + on_deck.repo + "/" + on_deck.pull_request + "!"
+      if on_deck
+        msg.send "#{on_deck.user.name} is next with #{on_deck.slug}!"
+      else
+        msg.send "Nobody's on deck!  Let's get some code out peeps ;)"
     else
-      msg.send whom.name + " isn't currently deploying :-/"
+      msg.reply "You aren't currently deploying :-/"
 
   # Remove active deploy
   robot.respond /remove active deploy$/i, (msg) ->
-    deployers.done whom, true
-    msg.send "cleared active deploy"
+    whom     = from_who msg
+    manifest = deployers.done whom, true
+
+    robot.emit 'deploy-lock:active-cleared', manifest if manifest
+    msg.reply "Cleared active deploy"
 
   # Clear out all of someone's deploys
   robot.respond /cancel (.*) deploys$/i, (msg) ->
     whom = from_who msg
     target = msg.match[1]
+
     if target == 'my'
       deployers.clear whom
-      msg.send whom.name + "'s deploys have been cleared"
+      msg.reply "Your deploys have been cleared"
     else
       target = { name: target }
       deployers.clear target
-      msg.send target.name + "'s deploys have been cleared"
+      msg.reply "#{target.name}'s deploys have been cleared"
 
   # Get the next deployer's info
   robot.respond /who(?:'s)?\s*next[\!\?]*\s*$/i, (msg) ->
-    whom = from_who msg
-    try
-      next = deployers.on_deck()
-      if next is undefined
-        msg.send "nobody's on deck"
-      else
-        msg.send next.user.name + " is deploying " + next.repo + "/" + next.pull_request + " next!"
-    catch error
-      msg.send "I can't do that " + whom.name
-      console.log "error showing who's next"
-      console.log error.stack
+    next = deployers.on_deck()
+
+    if next
+      msg.reply "#{next.user.name} is deploying #{next.slug} next!"
+    else
+      msg.reply "Nobody's on deck"
 
   # Show all the deployers waiting
   robot.respond /(?:(?:list|all)\s+deployers|who(?:'s)? deploying\??)$/i, (msg) ->
-    whom = from_who msg
-    try
-      list    = deployers.deployers()
-      active  = deployers.active()
-      message = ""
-      unless active is undefined
-        message = message + " *** " + active.user.name + " is currently deploying " + active.repo + "/" + active.pull_request + "\n"
-      if list.length == 0
-        message = message + "nobody's on deck\n"
-      else
-        for next in list
-          message = message + next.user.name + ": " + next.repo + "/" + next.pull_request + "\n"
-      unless message == ""
-        msg.send message.slice(0, -1) # strip off the last new line
-    catch error
-      msg.send "I can't do that " + whom.name
-      console.log "error showing who's next"
-      console.log error.stack
+    list     = deployers.manifests()
+    active   = deployers.active()
+    messages = []
+
+    if active
+      messages.push " *** #{active.user.name} is currently deploying #{active.slug}"
+    if list.length == 0
+      messages.push "Nobody's on deck!"
+    else
+      messages.push "#{next.user.name}: #{next.slug}" for next in list
+
+    msg.send messages.join("\n")
 
   # Some feedback on bad requests
   robot.respond /i(?:'m)?\s*next$/i, (msg) ->
     msg.send "You need to tell me what you want to deploy! (i'm next <repo> <pr#>)"
 
   # Some feedback on bad requests
-  robot.respond /i(?:'m)?\s*next\s*(\w+)$/i, (msg) ->
+  robot.respond /i(?:'m)?\s*next\s*([\w\.]+)$/i, (msg) ->
     msg.send "You need to tell me the PR you're deploying! (i'm next " + msg.match[1] + " <pr#>)"
 
+  # Get the topic and do stuff with it
+  robot.topic (msg) ->
+    topic   = msg.message.text.split('/', 2)[1]
+    active  = deployers.active()
+    on_deck = deployers.on_deck()
+
+    if active
+      deploy_text = "Current Deployer: #{active.user.name} - Deploying: #{active.slug} "
+    else if on_deck
+      deploy_text = "Next Deployer: #{on_deck.user.name} - Deploying: #{on_deck.slug} "
+    else
+      deploy_text = "Nobody on deck! "
+
+    console.log([ deploy_text, topic ].join('/'))
