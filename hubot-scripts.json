@@ -10,7 +10,6 @@
   "hello.coffee",
   "kittens.coffee",
   "lolz.coffee",
-  "mongo-brain.coffee",
   "pagerduty.coffee",
   "shipit.coffee",
   "snow.coffee",
@@ -18,4 +17,4 @@
   "twitter.coffee",
   "wat.coffee",
   "whoisout.coffee"
-  ]
+]
