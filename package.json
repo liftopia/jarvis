@@ -27,7 +27,7 @@
     "bson":                "*",
     "htmlparser":          "*",
     "hubot":               ">= 2.6.0 < 3.0.0",
-    "hubot-hipchat":       "2.5.1-5",
+    "hubot-hipchat":       "https://github.com/liftopia/hubot-hipchat/archive/fix-roster-updates.tar.gz",
     "hubot-plusplus":      "1.0.x",
     "hubot-scripts":       ">= 2.5.0 < 3.0.0",
     "moment":              "1.6.2",
