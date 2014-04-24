@@ -73,7 +73,7 @@ languages =
 
 getCode = (language,languages) ->
   for code, lang of languages
-      return code if lang.toLowerCase() is language.toLowerCase()
+    return code if lang.toLowerCase() is language.toLowerCase()
 
 module.exports = (robot) ->
   language_choices = (language for _, language of languages).sort().join('|')

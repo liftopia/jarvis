@@ -1,4 +1,4 @@
-# Description: 
+# Description:
 #   Generates help commands for Hubot.
 #
 # Commands:

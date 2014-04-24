@@ -22,6 +22,9 @@ _ = require 'underscore'
 module.exports = (robot) ->
   ON_CALL_KEY = 'on_call'
 
+  format_phone = (phone) ->
+    phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1.$2.$3')
+
   # more things that need to be librarified... this came from roles.coffee
   getAmbiguousUserText = (users) ->
     "Be more specific, I know #{users.length} people named like that: #{(user.name for user in users).join(", ")}"
@@ -38,9 +41,9 @@ module.exports = (robot) ->
         on_call ?= {}
         on_call[team] = user.id
         robot.brain.set ON_CALL_KEY, on_call
-        msg.send "#{name} is on call with #{user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1.$2.$3')} as their phone number"
+        msg.send "#{name} is on call with #{format_phone user.phone} as their phone number"
       else
-        msg.send "#{name} doesn't have a phone listed :( use `#{robot.name} #{name} has phone number <phone number>` to add one!"
+        msg.send "No number for #{name} :( use `#{robot.name} #{name} has phone number <phone number>` to add one!"
     else if users.length > 1
       msg.send getAmbiguousUserText users
     else
@@ -52,7 +55,7 @@ module.exports = (robot) ->
     if on_call and not _.isEmpty(on_call)
       for own team, user_id of on_call
         user = robot.brain.userForId(user_id)
-        response.push "#{team}: #{user.name} - #{user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1.$2.$3')}"
+        response.push "#{team}: #{user.name} - #{format_phone user.phone}"
       msg.send response.join("\n")
     else
       msg.send "Uh oh! Nobody's on call!"
@@ -70,6 +73,6 @@ module.exports = (robot) ->
     on_call = robot.brain.get ON_CALL_KEY
     if on_call and on_call[team]
       user = robot.brain.userForId(on_call[team])
-      msg.send "#{user.name} is on call at #{user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1.$2.$3')}"
+      msg.send "#{user.name} is on call at #{format_phone user.phone}"
     else
       msg.send "Nobody is on call for #{team}"

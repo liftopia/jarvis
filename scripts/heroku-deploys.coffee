@@ -10,7 +10,7 @@
 #
 # Examples:
 #   hubot heroku knows app Jarvïs Bötman as lift-jarvis
-#   hubot heroku knows user TestUser as user@test.com 
+#   hubot heroku knows user TestUser as user@test.com
 #
 # Author:
 #   doomspork

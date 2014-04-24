@@ -77,7 +77,7 @@ confirmative = ["Si c'est ce que vous voulez",
 punctuation  = ['.', '!', '...']
 
 capitalize = (string) ->
-  return string.charAt(0).toUpperCase() + string.slice(1);
+  string.charAt(0).toUpperCase() + string.slice(1)
 
 acknowledge = (message) ->
   phrase = message.random(confirmative)

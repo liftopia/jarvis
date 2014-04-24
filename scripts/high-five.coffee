@@ -16,7 +16,7 @@
 
 module.exports = (robot) ->
   robot.respond /(?:high ?five|\^5)(?: (@?[\w .\-_]+))?/i, (msg) ->
-    if (msg.match[1]) 
+    if (msg.match[1])
       user = msg.match[1].trim()
       msg.send "#{user} (highfive)"
     else
