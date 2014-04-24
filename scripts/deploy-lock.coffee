@@ -92,16 +92,16 @@ class Deployers
     @manifests()[0]
 
   activate: (manifest) ->
+    active = @active()
     on_deck = @on_deck()
 
-    if on_deck is undefined
-      @store.put 'active', manifest
-    else if on_deck.user.id == manifest.user.id && on_deck.repo == manifest.repo && on_deck.pull_request == manifest.pull_request
-      manifests = @manifests()
-      @store.put 'manifests', manifests.slice(1)
-      @store.put 'active', manifest
-    else
-      false
+    unless active?
+      if not on_deck?
+        @store.put 'active', manifest
+      else if _.isEqual(on_deck, manifest)
+        manifests = @manifests()
+        @store.put 'manifests', manifests.slice(1)
+        @store.put 'active', manifest
 
   force: (manifest) ->
     @store.put 'active', manifest
@@ -112,13 +112,13 @@ class Deployers
     manifests_left = []
 
     for man in manifests
-      unless man.user.id == manifest.user.id && man.repo == manifest.repo && man.pull_request == manifest.pull_request
+      unless _.isEqual(man, manifest)
         manifests_left.push man
 
     @store.put 'manifests', manifests_left
 
   active: ->
-    @store.get('active') || undefined
+    @store.get('active')
 
   done: (user, force = false) ->
     active = @active()
@@ -193,11 +193,15 @@ module.exports = (robot) ->
     manifest = manifest_from msg, msg.match[1], msg.match[2]
 
     if deployers.activate manifest
-      msg.reply "Deploying #{manifest.slug}"
+      msg.send "Deploying #{manifest.slug}"
       robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
     else
       on_deck = deployers.on_deck()
-      msg.reply "Negative. #{on_deck.user.name} (#{on_deck.slug}) is next."
+      active = deployers.active()
+      if active?
+        msg.send "Negative. #{active.user.name} is currently deploying #{active.slug}."
+      else
+        msg.send "Negative. #{on_deck.user.name} is deploying #{on_deck.slug} next."
 
   # Bypass the next deployer
   robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
