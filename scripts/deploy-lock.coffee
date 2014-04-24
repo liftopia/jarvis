@@ -128,6 +128,18 @@ class Deployers
     else
       false
 
+  topic: ->
+    messages = []
+    active = @active()
+    on_deck = @on_deck()
+
+    messages.push "Active: #{active.user.name} - #{active.slug}"    if active
+    messages.push "On Deck: #{on_deck.user.name} - #{on_deck.slug}" if on_deck
+
+    messages.push "Deploy Queue Open" if _.isEmpty(messages)
+
+    messages.join(' / ')
+
   count: ->
     @manifests().length
 
@@ -182,7 +194,7 @@ module.exports = (robot) ->
 
     if deployers.activate manifest
       msg.reply "Deploying #{manifest.slug}"
-      robot.emit 'deploy-lock:deploying', manifest
+      robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
     else
       on_deck = deployers.on_deck()
       msg.reply "Negative. #{on_deck.user.name} (#{on_deck.slug}) is next."
@@ -199,7 +211,7 @@ module.exports = (robot) ->
       msg.reply "Ok, you're bypassing #{on_deck.user.name}." if on_deck
       deployers.force manifest
       msg.send "Deploy bypass active, #{manifest.user.name} has jumped the gun with #{manifest.slug}."
-      robot.emit 'deploy-lock:deploying', manifest
+      robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
 
   # Add me to the list of deployers
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
@@ -207,7 +219,7 @@ module.exports = (robot) ->
 
     deployers.next manifest
     msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
-    robot.emit 'deploy-lock:next', manifest
+    robot.emit 'deploy-lock:next', { manifest: manifest, msg: msg }
 
   # Remove my deploy
   robot.respond /i(?:'m)?\s*done\s*deploying$/i, (msg) ->
@@ -215,8 +227,7 @@ module.exports = (robot) ->
     manifest = deployers.done whom
 
     if manifest
-      msg.send "#{whom.name} is done deploying"
-      robot.emit 'deploy-lock:done', manifest
+      robot.emit 'deploy-lock:done', { manifest: manifest, msg: msg }
 
       on_deck = deployers.on_deck()
       if on_deck
@@ -231,7 +242,7 @@ module.exports = (robot) ->
     whom     = from_who msg
     manifest = deployers.done whom, true
 
-    robot.emit 'deploy-lock:active-cleared', manifest if manifest
+    robot.emit 'deploy-lock:active-cleared', { manifest: manifest, msg: msg } if manifest
     msg.reply "Cleared active deploy"
 
   # Clear out all of someone's deploys
@@ -242,10 +253,12 @@ module.exports = (robot) ->
     if target == 'my'
       deployers.clear whom
       msg.reply "Your deploys have been cleared"
+      robot.emit 'deploy-lock:cleared', { manifest: {}, msg: msg }
     else
       target = { name: target }
       deployers.clear target
       msg.reply "#{target.name}'s deploys have been cleared"
+      robot.emit 'deploy-lock:cleared', { manifest: {}, msg: msg }
 
   # Get the next deployer's info
   robot.respond /who(?:'s)?\s*next[\!\?]*\s*$/i, (msg) ->
@@ -278,6 +291,37 @@ module.exports = (robot) ->
   # Some feedback on bad requests
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)$/i, (msg) ->
     msg.send "You need to tell me the PR you're deploying! (i'm next " + msg.match[1] + " <pr#>)"
+
+  topic_handler = (event) ->
+    on_call = robot.brain.get 'on_call'
+    msg = event.msg
+
+    topic = []
+    topic.push deployers.topic()
+
+    if on_call
+      for team in [ 'dev', 'product' ]
+        if on_call[team]
+          user = robot.brain.userForId on_call[team]
+          topic.push "#{user.name} - #{user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1.$2.$3')}"
+
+    msg.topic(topic.join(' / '))
+    console.log(topic.join(' / '))
+
+  robot.on 'deploy-lock:deploying', (event) ->
+    topic_handler event
+
+  robot.on 'deploy-lock:next', (event) ->
+    topic_handler event
+
+  robot.on 'deploy-lock:done', (event) ->
+    topic_handler event
+
+  robot.on 'deploy-lock:active-cleared', (event) ->
+    topic_handler event
+
+  robot.on 'deploy-lock:cleared', (event) ->
+    topic_handler event
 
   # Get the topic and do stuff with it
   robot.topic (msg) ->
