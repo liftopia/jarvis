@@ -297,20 +297,9 @@ module.exports = (robot) ->
     msg.send "You need to tell me the PR you're deploying! (i'm next " + msg.match[1] + " <pr#>)"
 
   topic_handler = (event) ->
-    on_call = robot.brain.get 'on_call'
     msg = event.msg
 
-    topic = []
-    topic.push deployers.topic()
-
-    if on_call
-      for team in [ 'dev', 'product' ]
-        if on_call[team]
-          user = robot.brain.userForId on_call[team]
-          topic.push "#{user.name} - #{user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1.$2.$3')}"
-
-    msg.topic(topic.join(' / '))
-    console.log(topic.join(' / '))
+    robot.emit 'update-topic', { msg: msg, topic: deployers.topic(), component: 'deployers' }
 
   robot.on 'deploy-lock:deploying', (event) ->
     topic_handler event
