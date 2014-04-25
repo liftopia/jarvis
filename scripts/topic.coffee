@@ -22,7 +22,6 @@ module.exports = (robot) ->
     for own comp, topic of topics[msg.envelope.room]
       new_topic.push topic
 
-    console.log(new_topic.join(' | '))
     msg.topic(new_topic.join(' | '))
 
   robot.on 'update-topic', (details) ->
@@ -33,10 +32,11 @@ module.exports = (robot) ->
     component = details.component
     topic = details.topic
 
-    topics[room] ?= {}
-    topics[room][component] = topic
+    if room? and component?
+      topics[room] ?= {}
+      topics[room][component] = topic
 
-    save_topics msg, topics
+      save_topics msg, topics
 
   robot.on 'delete-topic', (details) ->
     topics = get_topics()
@@ -45,7 +45,8 @@ module.exports = (robot) ->
     room = msg.envelope.room
     component = details.component
 
-    topics[room] ?= {}
-    delete topics[room][component]
+    if room? and component?
+      topics[room] ?= {}
+      delete topics[room][component]
 
-    save_topics msg, topics
+      save_topics msg, topics
