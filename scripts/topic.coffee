@@ -7,8 +7,6 @@
 # Author:
 #   amdtech
 
-util = require('util')
-
 module.exports = (robot) ->
   get_topics = ->
     topics = robot.brain.get 'topics'
