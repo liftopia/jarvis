@@ -235,7 +235,10 @@ module.exports = (robot) ->
 
       on_deck = deployers.on_deck()
       if on_deck
-        msg.send "#{on_deck.user.name} is next with #{on_deck.slug}!"
+        prepend = ''
+        prepend = '@' if on_deck.user.mention_name?
+        mention = "#{prepend}#{on_deck.user.mention_name || on_deck.user.name}"
+        msg.send "#{mention} is next (jarvis i'm deploying #{on_deck.slug})"
       else
         msg.send "Nobody's on deck!  Let's get some code out peeps ;)"
     else
@@ -316,17 +319,3 @@ module.exports = (robot) ->
   robot.on 'deploy-lock:cleared', (event) ->
     topic_handler event
 
-  # Get the topic and do stuff with it
-  robot.topic (msg) ->
-    topic   = msg.message.text.split('/', 2)[1]
-    active  = deployers.active()
-    on_deck = deployers.on_deck()
-
-    if active
-      deploy_text = "Current Deployer: #{active.user.name} - Deploying: #{active.slug} "
-    else if on_deck
-      deploy_text = "Next Deployer: #{on_deck.user.name} - Deploying: #{on_deck.slug} "
-    else
-      deploy_text = "Nobody on deck! "
-
-    console.log([ deploy_text, topic ].join('/'))
