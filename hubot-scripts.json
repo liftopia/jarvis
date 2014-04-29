@@ -6,6 +6,7 @@
   "chat.coffee",
   "commitmessage.coffee",
   "do-it-live.coffee",
+  "github-credentials.coffee",
   "github-status.coffee",
   "hello.coffee",
   "kittens.coffee",

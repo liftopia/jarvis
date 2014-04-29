@@ -25,6 +25,7 @@
 
   "dependencies": {
     "bson":                "*",
+    "githubot":            "0.5.x",
     "htmlparser":          "*",
     "hubot":               ">= 2.6.0 < 3.0.0",
     "hubot-hipchat":       "https://github.com/liftopia/hubot-hipchat/archive/fix-roster-updates.tar.gz",
