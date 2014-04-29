@@ -139,7 +139,6 @@ class Deployers
 
     @store.put 'manifests', manifests_left
 
-
   done: (user, callback) ->
     active = @active()
     if active? && active.user.id == user.id
@@ -168,7 +167,6 @@ class Deployers
     messages.push "Deploy Queue Open" if _.isEmpty(messages)
 
     messages.join(' / ')
-
 
   clear: (user, callback) ->
     manifests = @manifests()
