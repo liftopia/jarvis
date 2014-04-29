@@ -3,7 +3,7 @@
 #
 # Dependencies:
 #   Underscore
-#   "githubot": "0.5.x"
+#   githubot
 #
 # Configuration:
 #   HUBOT_GITHUB_TOKEN
@@ -84,7 +84,11 @@ class Storage
 
 # A simple class to manage our deployers
 class Deployers
-  constructor: (@store, @github) ->
+  constructor : (@store, @github) ->
+
+  active      : -> @store.get('active')
+  count       : -> @manifests().length
+  manifests   : -> @store.get('manifests') || []
 
   next: (manifest, callback) ->
     data = { body: "@#{manifest.user.githubLogin} is deploying this soon." }
@@ -135,8 +139,6 @@ class Deployers
 
     @store.put 'manifests', manifests_left
 
-  active: ->
-    @store.get('active')
 
   done: (user, callback) ->
     active = @active()
@@ -167,19 +169,18 @@ class Deployers
 
     messages.join(' / ')
 
-  count: ->
-    @manifests().length
 
-  clear: (user) ->
+  clear: (user, callback) ->
     manifests = @manifests()
     manifests_left = []
     for manifest in manifests
-      unless user.id == manifest.user.id || user.name == manifest.user.name
+      if user.id == manifest.user.id || user.name == manifest.user.name
+        data = { body: "This deploy has been canceled."}
+        @github.post manifest.comment_path, data, (issue) =>
+          callback?(manifest)
+      else
         manifests_left.push manifest
     @store.put 'manifests', manifests_left
-
-  manifests: ->
-    @store.get('manifests') || []
 
   # Internal: Collect the information needed to track
   #
@@ -188,14 +189,24 @@ class Deployers
   # pull_request - The Github PR ID
   #
   # Returns a manifest object
-  manifest_from: (msg, repo, pull_request) ->
-    user         : from_who msg
-    repo         : repo
-    pull_request : pull_request
-    slug         : "#{repo}/#{pull_request}"
-    url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
-    api_path     : "/repos/#{@github.qualified_repo repo}/pulls/#{pull_request}"
-    comment_path : "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
+  manifest_from: (msg, repo, pull_request, callback) ->
+    user = from_who msg
+    unless user.githubLogin?
+      msg.reply "You need to set your github login (#{robot.mention_name || robot.name} i am <github username>)"
+      return
+
+    api_path = "/repos/#{@github.qualified_repo repo}/pulls/#{pull_request}"
+    @github.get api_path, (pull) =>
+      manifest =
+        user         : user
+        repo         : repo
+        pull_request : pull_request
+        branch       : pull.head.ref
+        slug         : "#{repo}/#{pull_request}"
+        url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
+        api_path     : api_path
+        comment_path : "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
+      callback?(manifest)
 
 # Internal: Get user's hipchat name from message
 #
@@ -208,33 +219,23 @@ from_who = (message) ->
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
   github          = require('githubot')(robot)
-  NO_GITHUB_LOGIN = "You need to set your github login (#{robot.mention_name || robot.name} i am <github username>)"
+  release_url     = process.env.JENKINS_RELEASE_URL
 
   # Deployers and store initialization
   deployer_store  = new Storage robot, 'deployers'
   deployers       = new Deployers deployer_store, github
 
-  verify_github_login = (user, msg) ->
-    if user.githubLogin?
-      true
-    else
-      msg.reply NO_GITHUB_LOGIN
-      false
-
   # Basic error handling for logging and notification of errors
   robot.error (err, msg) ->
     robot.logger.error err.stack
-    msg.reply "Whoops... check #{robot.name}'s logs :(" if msg?
+    msg?.reply "Whoops... check #{robot.name}'s logs :("
 
   # Nicely set up next deployment
   robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    manifest = deployers.manifest_from msg, msg.match[1], msg.match[2]
-    return unless verify_github_login manifest.user, msg
-
-    github.get manifest.api_path, (pull) ->
+    deployers.manifest_from msg, msg.match[1], msg.match[2], (manifest) =>
       deployers.activate manifest, (activated) ->
         if activated
-          msg.send "Deploying #{manifest.slug}"
+          msg.send "Deploying #{manifest.slug} - Branch: #{manifest.branch} - Release URL: #{release_url}"
           robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
         else
           on_deck = deployers.on_deck()
@@ -246,37 +247,32 @@ module.exports = (robot) ->
 
   # Bypass the next deployer
   robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    manifest = deployers.manifest_from msg, msg.match[1], msg.match[2]
-    return unless verify_github_login manifest.user, msg
+    deployers.manifest_from msg, msg.match[1], msg.match[2], (manifest) =>
+      active  = deployers.active()
+      on_deck = deployers.on_deck()
 
-    active   = deployers.active()
-    on_deck  = deployers.on_deck()
+      if active?
+        msg.reply "Sorry, #{active.user.name} is currently deploying #{active.slug}."
+      else
+        msg.reply "Ok, you're bypassing #{on_deck.user.name}." if on_deck?
 
-    if active?
-      msg.reply "Sorry, #{active.user.name} is currently deploying #{active.slug}."
-    else
-      github.get manifest.api_path, (pull) ->
-        msg.reply "Ok, you're bypassing #{on_deck.user.name}." if on_deck
         deployers.force manifest, (issue) =>
           msg.send "Deploy bypass active, #{manifest.user.name} has jumped the gun with #{manifest.slug}."
           robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
 
   # Add me to the list of deployers
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    manifest = deployers.manifest_from msg, msg.match[1], msg.match[2]
-    return unless verify_github_login manifest.user, msg
-
-    github.get manifest.api_path, (pull) ->
+    deployers.manifest_from msg, msg.match[1], msg.match[2], (manifest) =>
       deployers.next manifest, (issue) =>
         msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
         robot.emit 'deploy-lock:next', { manifest: manifest, msg: msg }
 
   # Remove my deploy
   robot.respond /i(?:'m)?\s*done\s*deploying$/i, (msg) ->
-    whom     = from_who msg
+    whom = from_who msg
 
     deployers.done whom, (manifest) =>
-      if manifest
+      if manifest?
         robot.emit 'deploy-lock:done', { manifest: manifest, msg: msg }
 
         on_deck = deployers.on_deck()
@@ -292,17 +288,19 @@ module.exports = (robot) ->
 
   # Remove active deploy
   robot.respond /remove active deploy$/i, (msg) ->
-    whom     = from_who msg
-    active   = deployers.active()
+    whom   = from_who msg
+    active = deployers.active()
 
     unless active?
       msg.reply "There's nothing being deployed right now."
       return
 
-    return unless verify_github_login whom, msg
+    unless whom.githubLogin?
+      msg.reply "You need to set your github login (#{robot.mention_name || robot.name} i am <github username>)"
+      return
 
     deployers.remove_active whom, (manifest) =>
-      robot.emit 'deploy-lock:active-cleared', { manifest: manifest, msg: msg } if manifest
+      robot.emit 'deploy-lock:active-cleared', { manifest: manifest, msg: msg } if manifest?
       msg.reply "Cleared active deploy"
 
   # Clear out all of someone's deploys
@@ -317,9 +315,9 @@ module.exports = (robot) ->
       target = { name: target }
       mention = "#{target.name}'s"
 
-    deployers.clear target, (issue) =>
-      msg.reply "#{mention} deploys have been cleared"
-      robot.emit 'deploy-lock:cleared', { manifest: {}, msg: msg }
+    deployers.clear target, (manifest) =>
+      msg.reply "#{manifest.user.name}'s #{manifest.slug} deploy has been canceled."
+      robot.emit 'deploy-lock:cleared', { manifest: manifest, msg: msg }
 
   # Get the next deployer's info
   robot.respond /who(?:'s)?\s*next[\!\?]*\s*$/i, (msg) ->
@@ -353,22 +351,22 @@ module.exports = (robot) ->
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)$/i, (msg) ->
     msg.send "You need to tell me the PR you're deploying! (i'm next " + msg.match[1] + " <pr#>)"
 
-  topic_handler = (event) ->
-    msg = event.msg
+  topic_handler = (details) ->
+    msg = details.msg
 
     robot.emit 'update-topic', { msg: msg, topic: deployers.topic(), component: 'deployers' }
 
-  robot.on 'deploy-lock:deploying', (event) ->
-    topic_handler event
+  robot.on 'deploy-lock:deploying', (details) ->
+    topic_handler details
 
-  robot.on 'deploy-lock:next', (event) ->
-    topic_handler event
+  robot.on 'deploy-lock:next', (details) ->
+    topic_handler details
 
-  robot.on 'deploy-lock:done', (event) ->
-    topic_handler event
+  robot.on 'deploy-lock:done', (details) ->
+    topic_handler details
 
-  robot.on 'deploy-lock:active-cleared', (event) ->
-    topic_handler event
+  robot.on 'deploy-lock:active-cleared', (details) ->
+    topic_handler details
 
-  robot.on 'deploy-lock:cleared', (event) ->
-    topic_handler event
+  robot.on 'deploy-lock:cleared', (details) ->
+    topic_handler details
