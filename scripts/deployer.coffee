@@ -27,6 +27,7 @@ _           = require 'underscore'
 http        = require 'scoped-http-client'
 
 BRANCH_DOMAIN = 'liftopia.net'
+SSH_DOMAIN    = 'liftopia.nu'
 
 # Internal: Get the url for a hostname
 #
@@ -35,6 +36,14 @@ BRANCH_DOMAIN = 'liftopia.net'
 # Returns a string
 feature_url = (hostname) ->
   "http://#{hostname}.#{BRANCH_DOMAIN}"
+
+# Internal: Get the ssh url for a hostname
+#
+# hostname - the server's hostname
+#
+# Returns a string
+ssh_url = (hostname) ->
+  "ssh://#{hostname}.#{SSH_DOMAIN}"
 
 # Abstract Hubot brain
 class Storage
@@ -375,9 +384,9 @@ module.exports = (robot) ->
     hosts = deploy_store.keys()
     if hosts.length > 0
       host_list = for i, host of hosts
-        "#{parseInt(i) + 1}) #{host}"
-      host_string = host_list.join("\r\n")
-      msg.send "These are the ones I'm aware of:\n#{host_string}"
+        params = deploy_store.get(host)
+        "#{feature_url host} - #{ssh_url host}\nR / #{params?["RTOPIA_BRANCH"]} | P / #{params?["PTOPIA_BRANCH"]}"
+      msg.send host_list.join("\n")
     else
       response = random(["There are none, you might want to fix that.",
         "Empty.",
