@@ -383,9 +383,9 @@ module.exports = (robot) ->
   robot.respond /(?:list|get)?\s?deployments/i, (msg) ->
     hosts = deploy_store.keys()
     if hosts.length > 0
-      host_list = for host of hosts
+      host_list = for i, host of hosts
         params = deploy_store.get(host)
-        "#{feature_url host} - #{ssh_url host} - Branches: R/#{params['RTOPIA_BRANCH']},P/#{params['PTOPIA_BRANCH']}"
+        "#{feature_url host} - #{ssh_url host} - Branches: R/#{params?["RTOPIA_BRANCH"]},P/#{params?["PTOPIA_BRANCH"]}"
       msg.send host_list.join("\n")
     else
       response = random(["There are none, you might want to fix that.",
