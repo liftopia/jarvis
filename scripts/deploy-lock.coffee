@@ -2,8 +2,10 @@
 #   Deploy Locker
 #
 # Dependencies:
-#   Underscore
+#   dateformat
+#   fixed-array
 #   githubot
+#   Underscore
 #
 # Configuration:
 #   HUBOT_GITHUB_TOKEN
@@ -19,6 +21,7 @@
 #   hubot who's next - Find out who's deploying next
 #   hubot (all|list) deployers - List all deployers
 #   hubot who's deploying - List all deployers
+#   hubot deployment history - List the last deployments
 #   hubot remove active deploy - Remove the currently active deploy in case of disappearance
 #   hubot cancel (my|<name>) deploys - Remove all deploys for target
 #
@@ -26,6 +29,8 @@
 #   amdtech
 
 _           = require 'underscore'
+FixedArray  = require 'fixed-array'
+dateFormat  = require 'dateformat'
 
 # Abstract Hubot brain
 class Storage
@@ -145,9 +150,18 @@ class Deployers
       data = { body: "@#{active.user.githubLogin} has finished deploying." }
       @github.post active.comment_path, data, (issue) =>
         @store.remove('active')
+        @track active
         callback?(active)
     else
       callback?(false)
+
+  track: (active) ->
+    history = FixedArray(100, @history())
+    history.push active
+    @store.put 'history', history.array
+
+  history: ->
+    @store.get 'history'
 
   remove_active: (user, callback) ->
     data = { body: "@#{user.githubLogin} canceled this deploy."}
@@ -172,9 +186,9 @@ class Deployers
     manifests = @manifests()
     manifests_left = []
     for manifest in manifests
-      if user.id == manifest.user.id || user.name == manifest.user.name
+      if user.id == manifest.user.id
         data = { body: "This deploy has been canceled."}
-        @github.post manifest.comment_path, data, (issue) =>
+        @github.post manifest.comment_path, data, (issue) ->
           callback?(manifest)
       else
         manifests_left.push manifest
@@ -194,16 +208,19 @@ class Deployers
       return
 
     api_path = "/repos/#{@github.qualified_repo repo}/pulls/#{pull_request}"
+    now = Date.now()
     @github.get api_path, (pull) =>
       manifest =
-        user         : user
-        repo         : repo
-        pull_request : pull_request
-        branch       : pull.head.ref
-        slug         : "#{repo}/#{pull_request}"
-        url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
         api_path     : api_path
+        branch       : pull.head.ref
         comment_path : "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
+        human_time   : "#{dateFormat(now)}"
+        pull_request : pull_request
+        repo         : repo
+        slug         : "#{repo}/#{pull_request}"
+        timestamp    : now
+        url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
+        user         : user
       callback?(manifest)
 
 # Internal: Get user's hipchat name from message
@@ -227,6 +244,9 @@ module.exports = (robot) ->
   robot.error (err, msg) ->
     robot.logger.error err.stack
     msg?.reply "Whoops... check #{robot.name}'s logs :("
+
+  getAmbiguousUserText = (users) ->
+    "Be more specific, I know #{users.length} people named like that: #{(user.name for user in users).join(", ")}"
 
   # Nicely set up next deployment
   robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
@@ -310,12 +330,41 @@ module.exports = (robot) ->
     if target == 'my'
       target = whom
     else
-      target = { name: target }
+      users = robot.brain.usersForFuzzyName(target)
+      if users.length is 1
+        target = users[0]
+      else if users.length > 1
+        msg.send getAmbiguousUserText users
+        return
+      else
+        msg.send "#{name}? Never heard of 'em"
+        return
+
       mention = "#{target.name}'s"
 
     deployers.clear target, (manifest) =>
       msg.reply "#{manifest.user.name}'s #{manifest.slug} deploy has been canceled."
       robot.emit 'deploy-lock:cleared', { manifest: manifest, msg: msg }
+
+  # Get the history
+  robot.respond /deployment history$/i, (msg) ->
+    history = deployers.history()
+
+    messages = []
+    for manifest in history.slice(0).reverse()
+      timestamp = manifest.human_time
+      timestamp ?= "No Timestamp"
+
+      content = [
+        timestamp,
+        manifest.url,
+        manifest.user.githubLogin,
+        manifest.branch
+      ]
+
+      messages.push content.join ' | '
+
+    msg.send messages.join("\n")
 
   # Get the next deployer's info
   robot.respond /who(?:'s)?\s*next[\!\?]*\s*$/i, (msg) ->
