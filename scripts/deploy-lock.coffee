@@ -2,6 +2,7 @@
 #   Deploy Locker
 #
 # Dependencies:
+#   dateformat
 #   fixed-array
 #   githubot
 #   Underscore
@@ -29,6 +30,7 @@
 
 _           = require 'underscore'
 FixedArray  = require 'fixed-array'
+dateFormat  = require 'dateformat'
 
 # Abstract Hubot brain
 class Storage
@@ -206,6 +208,7 @@ class Deployers
       return
 
     api_path = "/repos/#{@github.qualified_repo repo}/pulls/#{pull_request}"
+    now = Date.now()
     @github.get api_path, (pull) =>
       manifest =
         user         : user
@@ -213,6 +216,8 @@ class Deployers
         pull_request : pull_request
         branch       : pull.head.ref
         slug         : "#{repo}/#{pull_request}"
+        timestamp    : now
+        human_time   : "#{dateFormat(now)}"
         url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
         api_path     : api_path
         comment_path : "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
@@ -346,8 +351,8 @@ module.exports = (robot) ->
     history = deployers.history()
 
     messages = []
-    for manifest in history
-      messages.push "#{manifest.user.githubLogin} - #{manifest.slug} - #{manifest.branch} - #{manifest.url}"
+    for manifest in history.slice(0).reverse()
+      messages.push "#{manifest.human_time}: #{manifest.user.githubLogin} - #{manifest.slug} - #{manifest.branch} - #{manifest.url}"
 
     msg.send messages.join("\n")
 

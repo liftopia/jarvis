@@ -25,6 +25,7 @@
 
   "dependencies": {
     "bson":                "*",
+    "dateformat":          "*",
     "fixed-array":         "1.0.0",
     "githubot":            "0.5.x",
     "htmlparser":          "*",
