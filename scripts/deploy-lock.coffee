@@ -325,7 +325,7 @@ module.exports = (robot) ->
     if target == 'my'
       target = whom
     else
-      users = robot.brain.usersForFuzzyName(name)
+      users = robot.brain.usersForFuzzyName(target)
       if users.length is 1
         target = users[0]
       else if users.length > 1
