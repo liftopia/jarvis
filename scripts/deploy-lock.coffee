@@ -211,16 +211,16 @@ class Deployers
     now = Date.now()
     @github.get api_path, (pull) =>
       manifest =
-        user         : user
-        repo         : repo
-        pull_request : pull_request
+        api_path     : api_path
         branch       : pull.head.ref
+        comment_path : "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
+        human_time   : "#{dateFormat(now)}"
+        pull_request : pull_request
+        repo         : repo
         slug         : "#{repo}/#{pull_request}"
         timestamp    : now
-        human_time   : "#{dateFormat(now)}"
         url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
-        api_path     : api_path
-        comment_path : "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
+        user         : user
       callback?(manifest)
 
 # Internal: Get user's hipchat name from message
