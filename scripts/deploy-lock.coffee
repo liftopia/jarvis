@@ -184,9 +184,9 @@ class Deployers
     manifests = @manifests()
     manifests_left = []
     for manifest in manifests
-      if user.id == manifest.user.id || user.name == manifest.user.name
+      if user.id == manifest.user.id
         data = { body: "This deploy has been canceled."}
-        @github.post manifest.comment_path, data, (issue) =>
+        @github.post manifest.comment_path, data, (issue) ->
           callback?(manifest)
       else
         manifests_left.push manifest
