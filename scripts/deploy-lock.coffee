@@ -352,7 +352,9 @@ module.exports = (robot) ->
 
     messages = []
     for manifest in history.slice(0).reverse()
-      messages.push "#{manifest.human_time}: #{manifest.user.githubLogin} - #{manifest.slug} - #{manifest.branch} - #{manifest.url}"
+      timestamp = manifest.human_time
+      timestamp ?= "No Timestamp"
+      messages.push "#{timestamp}: #{manifest.user.githubLogin}\t#{manifest.slug}\t#{manifest.branch}\t#{manifest.url}"
 
     msg.send messages.join("\n")
 
