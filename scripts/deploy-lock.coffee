@@ -240,6 +240,9 @@ module.exports = (robot) ->
     robot.logger.error err.stack
     msg?.reply "Whoops... check #{robot.name}'s logs :("
 
+  getAmbiguousUserText = (users) ->
+    "Be more specific, I know #{users.length} people named like that: #{(user.name for user in users).join(", ")}"
+
   # Nicely set up next deployment
   robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
     deployers.manifest_from msg, msg.match[1], msg.match[2], (manifest) =>
@@ -322,7 +325,16 @@ module.exports = (robot) ->
     if target == 'my'
       target = whom
     else
-      target = { name: target }
+      users = robot.brain.usersForFuzzyName(name)
+      if users.length is 1
+        target = users[0]
+      else if users.length > 1
+        msg.send getAmbiguousUserText users
+        return
+      else
+        msg.send "#{name}? Never heard of 'em"
+        return
+
       mention = "#{target.name}'s"
 
     deployers.clear target, (manifest) =>
