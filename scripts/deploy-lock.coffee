@@ -2,8 +2,9 @@
 #   Deploy Locker
 #
 # Dependencies:
-#   Underscore
+#   fixed-array
 #   githubot
+#   Underscore
 #
 # Configuration:
 #   HUBOT_GITHUB_TOKEN
@@ -26,6 +27,7 @@
 #   amdtech
 
 _           = require 'underscore'
+FixedArray  = require 'fixed-array'
 
 # Abstract Hubot brain
 class Storage
@@ -145,9 +147,18 @@ class Deployers
       data = { body: "@#{active.user.githubLogin} has finished deploying." }
       @github.post active.comment_path, data, (issue) =>
         @store.remove('active')
+        @track active
         callback?(active)
     else
       callback?(false)
+
+  track: (active) ->
+    history = FixedArray(100, @history())
+    history.push active
+    @store.put 'history', history.array
+
+  history: ->
+    @store.get 'history'
 
   remove_active: (user, callback) ->
     data = { body: "@#{user.githubLogin} canceled this deploy."}
@@ -316,6 +327,16 @@ module.exports = (robot) ->
     deployers.clear target, (manifest) =>
       msg.reply "#{manifest.user.name}'s #{manifest.slug} deploy has been canceled."
       robot.emit 'deploy-lock:cleared', { manifest: manifest, msg: msg }
+
+  # Get the history
+  robot.respond /deployment history$/i, (msg) ->
+    history = deployers.history()
+
+    messages = []
+    for manifest in history
+      messages.push "#{manifest.user.githubLogin} - #{manifest.slug} - #{manifest.branch} - #{manifest.url}"
+
+    msg.send messages.join("\n")
 
   # Get the next deployer's info
   robot.respond /who(?:'s)?\s*next[\!\?]*\s*$/i, (msg) ->
