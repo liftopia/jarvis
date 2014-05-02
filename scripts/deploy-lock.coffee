@@ -12,6 +12,7 @@
 #   HUBOT_GITHUB_USER
 #   HUBOT_GITHUB_API
 #   HUBOT_GITHUB_ORG
+#   HUBOT_REPOS_LOOKUP
 #
 # Commands:
 #   hubot I'm deploying <repo> <pr#> - Flag yourself as deploying something
@@ -201,28 +202,39 @@ class Deployers
   # pull_request - The Github PR ID
   #
   # Returns a manifest object
-  manifest_from: (msg, repo, pull_request, callback) ->
+  manifest_from: (msg, repo, pull_request, opts = {}, callback) ->
     user = from_who msg
     unless user.githubLogin?
       msg.reply "You need to set your github login (#{robot.mention_name || robot.name} i am <github username>)"
       return
 
     api_path = "/repos/#{@github.qualified_repo repo}/pulls/#{pull_request}"
+    comment_path = "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
     now = Date.now()
     @github.get api_path, (pull) =>
-      manifest =
-        api_path     : api_path
-        branch       : pull.head.ref
-        comment_path : "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
-        human_time   : "#{dateFormat(now)}"
-        pull_request : pull_request
-        repo         : repo
-        slug         : "#{repo}/#{pull_request}"
-        timestamp    : now
-        url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
-        user         : user
-      console.log "Manifest created for #{manifest.user.name} : #{manifest.slug}"
-      callback?(manifest)
+      @github.get comment_path, (comments) =>
+        deploy_approved = opts.force
+        _.each comments, (comment) ->
+          if comment.user.login != pull.user.login
+            deploy_approved = true  if /:grapes:/.test comment.body
+            deploy_approved = false if /:lemon:/.test comment.body
+        unless deploy_approved
+          msg.reply "You don't have grapes yet..."
+          return
+        manifest =
+          api_path     : api_path
+          branch       : pull.head.ref
+          comment_path : comment_path
+          githubLogin  : pull.user.login
+          human_time   : "#{dateFormat(now)}"
+          pull_request : pull_request
+          repo         : repo
+          slug         : "#{repo}/#{pull_request}"
+          timestamp    : now
+          url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
+          user         : user
+        console.log "Manifest created for #{manifest.user.name} : #{manifest.slug}"
+        callback?(manifest)
 
 # Internal: Get user's hipchat name from message
 #
@@ -236,6 +248,12 @@ from_who = (message) ->
 module.exports = (robot) ->
   github          = require('githubot')(robot)
   release_url     = process.env.JENKINS_RELEASE_URL
+  production_job  = process.env.JENKINS_PRODUCTION_JOB
+  repos           = {}
+
+  _.each process.env.HUBOT_REPOS_LOOKUP?.split(','), (details) ->
+    [ name, param ] = details.split(':')
+    repos[name]     = param
 
   # Deployers and store initialization
   deployer_store  = new Storage robot, 'deployers'
@@ -251,7 +269,7 @@ module.exports = (robot) ->
 
   # Nicely set up next deployment
   robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], (manifest) =>
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) =>
       deployers.activate manifest, (activated) ->
         if activated
           msg.send "Deploying #{manifest.slug} - Branch: #{manifest.branch} - Release URL: #{release_url}"
@@ -266,7 +284,7 @@ module.exports = (robot) ->
 
   # Bypass the next deployer
   robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], (manifest) =>
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: true }, (manifest) =>
       active  = deployers.active()
       on_deck = deployers.on_deck()
 
@@ -281,7 +299,7 @@ module.exports = (robot) ->
 
   # Add me to the list of deployers
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], (manifest) =>
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) =>
       deployers.next manifest, (issue) =>
         msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
         robot.emit 'deploy-lock:next', { manifest: manifest, msg: msg }
@@ -405,6 +423,17 @@ module.exports = (robot) ->
     robot.emit 'update-topic', { msg: msg, topic: deployers.topic(), component: 'deployers' }
 
   robot.on 'deploy-lock:deploying', (details) ->
+    manifest                     = details.manifest
+    msg                          = details.msg
+    params                       = {}
+    params[repos[manifest.repo]] = manifest.branch
+    params["Confirmed"]          = "true"
+
+    if manifest.user.githubLogin == manifest.githubLogin
+      robot.emit 'jenkins:build', production_job, params, msg
+    else
+      msg.reply "That's not your pull request. To manually deploy, go to #{release_url}."
+
     topic_handler details
 
   robot.on 'deploy-lock:next', (details) ->
