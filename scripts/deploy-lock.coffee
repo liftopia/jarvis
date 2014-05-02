@@ -120,7 +120,7 @@ class Deployers
         @github.post manifest.comment_path, data, (issue) =>
           @store.put 'active', manifest
           callback?(true)
-      else if _.isEqual(on_deck, manifest)
+      else if on_deck.user.id == manifest.user.id && on_deck.slug == manifest.slug
         @github.post manifest.comment_path, data, (issue) =>
           manifests = @manifests()
           @store.put 'manifests', manifests.slice(1)
