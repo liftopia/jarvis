@@ -427,6 +427,7 @@ module.exports = (robot) ->
     msg                          = details.msg
     params                       = {}
     params[repos[manifest.repo]] = manifest.branch
+    params["Confirmed"]          = true
 
     if manifest.user.githubLogin == manifest.githubLogin
       robot.emit 'jenkins:build', production_job, params, msg
