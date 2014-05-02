@@ -139,7 +139,7 @@ class Deployers
     manifests_left = []
 
     for man in manifests
-      unless _.isEqual(man, manifest)
+      unless man.user.id == manifest.user.id && man.slug == manifest.slug
         manifests_left.push man
 
     @store.put 'manifests', manifests_left
@@ -221,6 +221,7 @@ class Deployers
         timestamp    : now
         url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
         user         : user
+      console.log "Manifest created for #{manifest.user.name} : #{manifest.slug}"
       callback?(manifest)
 
 # Internal: Get user's hipchat name from message
@@ -337,7 +338,7 @@ module.exports = (robot) ->
         msg.send getAmbiguousUserText users
         return
       else
-        msg.send "#{name}? Never heard of 'em"
+        msg.send "#{target}? Never heard of 'em"
         return
 
       mention = "#{target.name}'s"
