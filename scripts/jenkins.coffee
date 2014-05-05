@@ -23,7 +23,4 @@ module.exports = (robot) ->
 
   robot.on 'jenkins:build', (job, params, msg) ->
     jenkins.job.build job, { token: token, parameters: params }, (err) ->
-      if err
-        msg.send "Error building :( #{err}"
-      else
-        msg.send "Building #{job} with params #{_.keys params}"
+      msg.send "Error building :( #{err}" if err
