@@ -27,7 +27,7 @@
     "bson":                "*",
     "dateformat":          "*",
     "fixed-array":         "1.0.0",
-    "githubot":            "0.5.x",
+    "github":              "0.1.16",
     "htmlparser":          "*",
     "hubot":               ">= 2.6.0 < 3.0.0",
     "hubot-hipchat":       "https://github.com/liftopia/hubot-hipchat/archive/fix-roster-updates.tar.gz",
