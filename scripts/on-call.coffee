@@ -47,7 +47,7 @@ module.exports = (robot) ->
       robot.emit 'update-topic', { msg: msg, topic: topic.join(' / '), component: 'on-call' }
 
   robot.respond /on call for (\w+) @?([\w .\-]+)$/i, (msg) ->
-    team = msg.match[1]
+    team = msg.match[1].toLowerCase()
     name = msg.match[2].trim()
 
     users = robot.brain.usersForFuzzyName(name)
@@ -82,7 +82,7 @@ module.exports = (robot) ->
       msg.send "Uh oh! Nobody's on call!"
 
   robot.respond /remove on call for (\w+)$/i, (msg) ->
-    team = msg.match[1]
+    team = msg.match[1].toLowerCase()
     on_call = robot.brain.get ON_CALL_KEY
     delete on_call[team]
     robot.brain.set ON_CALL_KEY, on_call
@@ -92,7 +92,7 @@ module.exports = (robot) ->
     msg.send "Removed on call for #{team}"
 
   robot.respond /on call for (\w+)$/i, (msg) ->
-    team = msg.match[1]
+    team = msg.match[1].toLowerCase()
     on_call = robot.brain.get ON_CALL_KEY
     if on_call and on_call[team]
       user = robot.brain.userForId(on_call[team])
