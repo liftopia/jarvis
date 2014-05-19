@@ -281,32 +281,50 @@ class Deployers
     github.pullRequests.get options, (err, pull) =>
       return if @handle_error(msg, "Issue getting pull request", err)?
 
-      github.issues.getComments options, (err, comments) =>
-        return if @handle_error(msg, "Issue getting comments", err)?
+      options.base = "master"
+      options.head = pull.head.ref
 
-        unless opts.force?
-          _.each comments, (comment) ->
-            if comment.user.login != pull.user.login
-              deploy_approved = true  if /:grapes:/.test comment.body
-              deploy_approved = false if /:lemon:/.test comment.body
-          unless deploy_approved
-            msg.reply "You don't have grapes yet..."
-            return
+      github.repos.compareCommits options, (err, commits) =>
+        return if @handle_error(msg, "Issue comparing commits", err)?
 
-        manifest =
-          branch         : pull.head.ref
-          githubLogin    : pull.user.login
-          github_options : options
-          human_time     : "#{dateFormat(now)}"
-          pull_request   : pull_request
-          repo           : repo
-          slug           : "#{repo}/#{pull_request}"
-          timestamp      : now
-          url            : "https://github.com/#{default_github_user}/#{repo}/pull/#{pull_request}"
-          user           : user
+        unless commits.status is "ahead"
+          message = ""
 
-        console.log "Manifest created for #{manifest.user.name} : #{manifest.slug}"
-        callback?(manifest)
+          if commits.status is "identical"
+            msg.reply "Your branch is identical to master, did you forget to push something?"
+          else if commits.status is "diverged"
+            msg.reply "Your branch has diverged from master, you'll need to rebase on master."
+          else
+            msg.reply "Your branch is #{commits.status} master, please rebase on master."
+
+          return
+
+        github.issues.getComments options, (err, comments) =>
+          return if @handle_error(msg, "Issue getting comments", err)?
+
+          unless opts.force?
+            _.each comments, (comment) ->
+              if comment.user.login != pull.user.login
+                deploy_approved = true  if /:grapes:/.test comment.body
+                deploy_approved = false if /:lemon:/.test comment.body
+            unless deploy_approved
+              msg.reply "You don't have grapes yet..."
+              return
+
+          manifest =
+            branch         : pull.head.ref
+            githubLogin    : pull.user.login
+            github_options : options
+            human_time     : "#{dateFormat(now)}"
+            pull_request   : pull_request
+            repo           : repo
+            slug           : "#{repo}/#{pull_request}"
+            timestamp      : now
+            url            : "https://github.com/#{default_github_user}/#{repo}/pull/#{pull_request}"
+            user           : user
+
+          console.log "Manifest created for #{manifest.user.name} : #{manifest.slug}"
+          callback?(manifest)
 
 # Internal: Get user's hipchat name from message
 #
