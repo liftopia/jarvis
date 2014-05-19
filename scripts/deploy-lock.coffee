@@ -29,9 +29,23 @@
 # Author:
 #   amdtech
 
-_           = require 'underscore'
-FixedArray  = require 'fixed-array'
-dateFormat  = require 'dateformat'
+_          = require 'underscore'
+FixedArray = require 'fixed-array'
+dateFormat = require 'dateformat'
+gh         = require('github')
+
+github = new gh({ version: "3.0.0", protocol: "https" })
+github.authenticate { type: "oauth", token: process.env.HUBOT_GITHUB_TOKEN }
+
+default_github_user = process.env.HUBOT_GITHUB_USER
+
+# borrowed from githubot
+qualified_repo = (repo) ->
+  return null unless repo?
+  repo = repo.toLowerCase()
+  return repo unless repo.indexOf("/") is -1
+  return repo unless (user = default_github_user)?
+  "#{user}/#{repo}"
 
 # Abstract Hubot brain
 class Storage
@@ -88,52 +102,84 @@ class Storage
   keys: ->
     _.keys @cache
 
+clone = (obj) ->
+  if not obj? or typeof obj isnt 'object'
+    return obj
+
+  if obj instanceof Date
+    return new Date(obj.getTime())
+
+  if obj instanceof RegExp
+    flags = ''
+    flags += 'g' if obj.global?
+    flags += 'i' if obj.ignoreCase?
+    flags += 'm' if obj.multiline?
+    flags += 'y' if obj.sticky?
+    return new RegExp(obj.source, flags)
+
+  newInstance = new obj.constructor()
+  newInstance[key] = clone obj[key] for key of obj
+  newInstance
+
 # A simple class to manage our deployers
 class Deployers
-  constructor : (@store, @github) ->
+  constructor : (@store) ->
 
   active      : -> @store.get('active')
   count       : -> @manifests().length
+  history     : -> @store.get 'history' || []
   manifests   : -> @store.get('manifests') || []
+  on_deck     : -> @manifests()[0]
 
-  next: (manifest, callback) ->
-    data = { body: "@#{manifest.user.githubLogin} is deploying this soon." }
-    @github.post manifest.comment_path, data, (issue) =>
+  next: (msg, manifest, callback) ->
+    options      = clone manifest.github_options
+    options.body = "@#{manifest.user.githubLogin} is deploying this soon."
+
+    github.issues.createComment options, (err, comment) =>
+      return if @handle_error(msg, "Issue posting comment", err)?
+
       manifests = @manifests()
 
       manifests.push manifest
       @store.put 'manifests', manifests
 
-      callback?(issue)
+      callback?(comment)
 
-  on_deck: ->
-    @manifests()[0]
-
-  activate: (manifest, callback) ->
-    active = @active()
+  activate: (msg, manifest, callback) ->
+    active  = @active()
     on_deck = @on_deck()
 
     if active?
       callback?(false)
     else
-      data = { body: "@#{manifest.user.githubLogin} is deploying this now." }
+      options      = clone manifest.github_options
+      options.body = "@#{manifest.user.githubLogin} is deploying this now."
+
       if not on_deck?
-        @github.post manifest.comment_path, data, (issue) =>
+        github.issues.createComment options, (err, comment) =>
+          return if @handle_error(msg, "Issue posting comment", err)?
+
           @store.put 'active', manifest
-          callback?(true)
+          callback?(comment)
       else if on_deck.user.id == manifest.user.id && on_deck.slug == manifest.slug
-        @github.post manifest.comment_path, data, (issue) =>
+        github.issues.createComment options, (err, comment) =>
+          return if @handle_error(msg, "Issue posting comment", err)?
+
           manifests = @manifests()
           @store.put 'manifests', manifests.slice(1)
           @store.put 'active', manifest
-          callback?(true)
+          callback?(comment)
 
-  force: (manifest, callback) ->
-    data = { body: "@#{manifest.user.githubLogin} is forcibly deploying this now." }
-    @github.post manifest.comment_path, data, (issue) =>
+  force: (msg, manifest, callback) ->
+    options      = clone manifest.github_options
+    options.body = "@#{manifest.user.githubLogin} is forcibly deploying this now."
+
+    github.issues.createComment options, (err, comment) =>
+      return if @handle_error(msg, "Issue posting comment", err)?
+
       @store.put 'active', manifest
       @remove manifest
-      callback?(issue)
+      callback?(comment)
 
   remove: (manifest) ->
     manifests      = @manifests()
@@ -145,11 +191,15 @@ class Deployers
 
     @store.put 'manifests', manifests_left
 
-  done: (user, callback) ->
+  done: (msg, user, callback) =>
     active = @active()
-    if active? && active.user.id == user.id
-      data = { body: "@#{active.user.githubLogin} has finished deploying." }
-      @github.post active.comment_path, data, (issue) =>
+    if active?.user.id == user.id
+      options      = clone active.github_options
+      options.body = "@#{active.user.githubLogin} has finished deploying."
+
+      github.issues.createComment options, (err, comment) =>
+        return if @handle_error(msg, "Issue posting comment", err)?
+
         @store.remove('active')
         @track active
         callback?(active)
@@ -161,39 +211,52 @@ class Deployers
     history.push active
     @store.put 'history', history.array
 
-  history: ->
-    @store.get 'history'
+  remove_active: (msg, user, callback) ->
+    active       = @active()
 
-  remove_active: (user, callback) ->
-    data = { body: "@#{user.githubLogin} canceled this deploy."}
-    active = @active()
-    @github.post active.comment_path, data, (issue) =>
+    options      = clone active.github_options
+    options.body = "@#{user.githubLogin} canceled this deploy."
+
+    github.issues.createComment options, (err, comment) =>
+      return if @handle_error(msg, "Issue posting comment", err)?
+
       @store.remove('active')
       callback?(active)
 
   topic: ->
     messages = []
-    active = @active()
-    on_deck = @on_deck()
+    active   = @active()
+    on_deck  = @on_deck()
 
     messages.push "Active: #{active.user.name} - #{active.slug}"    if active
     messages.push "On Deck: #{on_deck.user.name} - #{on_deck.slug}" if on_deck
 
     messages.push "Deploy Queue Open" if _.isEmpty(messages)
 
-    messages.join(' / ')
+    messages.join ' / '
 
-  clear: (user, callback) ->
+  clear: (msg, user, callback) ->
     manifests = @manifests()
     manifests_left = []
+
     for manifest in manifests
       if user.id == manifest.user.id
-        data = { body: "This deploy has been canceled."}
-        @github.post manifest.comment_path, data, (issue) ->
+        options      = clone manifest.github_options
+        options.body = "This deploy has been canceled."
+
+        github.issues.createComment options, (err, comment) =>
+          return if @handle_error(msg, "Issue posting comment", err)?
+
           callback?(manifest)
       else
         manifests_left.push manifest
+
     @store.put 'manifests', manifests_left
+
+  handle_error: (msg, message, err) ->
+    if err?
+      msg.send "#{message}: #{JSON.parse(err).message}"
+      true
 
   # Internal: Collect the information needed to track
   #
@@ -208,31 +271,40 @@ class Deployers
       msg.reply "You need to set your github login (#{robot.mention_name || robot.name} i am <github username>)"
       return
 
-    api_path = "/repos/#{@github.qualified_repo repo}/pulls/#{pull_request}"
-    comment_path = "/repos/#{@github.qualified_repo repo}/issues/#{pull_request}/comments"
     now = Date.now()
-    @github.get api_path, (pull) =>
-      @github.get comment_path, (comments) =>
-        deploy_approved = opts.force
-        _.each comments, (comment) ->
-          if comment.user.login != pull.user.login
-            deploy_approved = true  if /:grapes:/.test comment.body
-            deploy_approved = false if /:lemon:/.test comment.body
-        unless deploy_approved
-          msg.reply "You don't have grapes yet..."
-          return
+
+    options =
+      number : pull_request
+      repo   : repo
+      user   : default_github_user
+
+    github.pullRequests.get options, (err, pull) =>
+      return if @handle_error(msg, "Issue getting pull request", err)?
+
+      github.issues.getComments options, (err, comments) =>
+        return if @handle_error(msg, "Issue getting comments", err)?
+
+        unless opts.force?
+          _.each comments, (comment) ->
+            if comment.user.login != pull.user.login
+              deploy_approved = true  if /:grapes:/.test comment.body
+              deploy_approved = false if /:lemon:/.test comment.body
+          unless deploy_approved
+            msg.reply "You don't have grapes yet..."
+            return
+
         manifest =
-          api_path     : api_path
-          branch       : pull.head.ref
-          comment_path : comment_path
-          githubLogin  : pull.user.login
-          human_time   : "#{dateFormat(now)}"
-          pull_request : pull_request
-          repo         : repo
-          slug         : "#{repo}/#{pull_request}"
-          timestamp    : now
-          url          : "https://github.com/liftopia/#{repo}/pull/#{pull_request}"
-          user         : user
+          branch         : pull.head.ref
+          githubLogin    : pull.user.login
+          github_options : options
+          human_time     : "#{dateFormat(now)}"
+          pull_request   : pull_request
+          repo           : repo
+          slug           : "#{repo}/#{pull_request}"
+          timestamp      : now
+          url            : "https://github.com/#{default_github_user}/#{repo}/pull/#{pull_request}"
+          user           : user
+
         console.log "Manifest created for #{manifest.user.name} : #{manifest.slug}"
         callback?(manifest)
 
@@ -246,7 +318,6 @@ from_who = (message) ->
 
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
-  github          = require('githubot')(robot)
   release_url     = process.env.JENKINS_RELEASE_URL
   production_job  = process.env.JENKINS_PRODUCTION_JOB
   repos           = {}
@@ -257,7 +328,7 @@ module.exports = (robot) ->
 
   # Deployers and store initialization
   deployer_store  = new Storage robot, 'deployers'
-  deployers       = new Deployers deployer_store, github
+  deployers       = new Deployers deployer_store
 
   # Basic error handling for logging and notification of errors
   robot.error (err, msg) ->
@@ -269,10 +340,10 @@ module.exports = (robot) ->
 
   # Nicely set up next deployment
   robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) =>
-      deployers.activate manifest, (activated) ->
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) ->
+      deployers.activate msg, manifest, (activated) ->
         if activated
-          msg.send "Deploying #{manifest.slug} - Branch: #{manifest.branch} - Release URL: #{release_url}"
+          msg.send "Deploying #{manifest.slug} - Branch: #{manifest.branch}"
           robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
         else
           on_deck = deployers.on_deck()
@@ -284,7 +355,7 @@ module.exports = (robot) ->
 
   # Bypass the next deployer
   robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: true }, (manifest) =>
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: true }, (manifest) ->
       active  = deployers.active()
       on_deck = deployers.on_deck()
 
@@ -293,14 +364,14 @@ module.exports = (robot) ->
       else
         msg.reply "Ok, you're bypassing #{on_deck.user.name}." if on_deck?
 
-        deployers.force manifest, (issue) =>
+        deployers.force msg, manifest, (issue) ->
           msg.send "Deploy bypass active, #{manifest.user.name} has jumped the gun with #{manifest.slug}."
           robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
 
   # Add me to the list of deployers
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) =>
-      deployers.next manifest, (issue) =>
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) ->
+      deployers.next msg, manifest, (issue) ->
         msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
         robot.emit 'deploy-lock:next', { manifest: manifest, msg: msg }
 
@@ -308,7 +379,7 @@ module.exports = (robot) ->
   robot.respond /i(?:'m)?\s*done\s*deploying$/i, (msg) ->
     whom = from_who msg
 
-    deployers.done whom, (manifest) =>
+    deployers.done msg, whom, (manifest) ->
       if manifest?
         robot.emit 'deploy-lock:done', { manifest: manifest, msg: msg }
 
@@ -336,7 +407,7 @@ module.exports = (robot) ->
       msg.reply "You need to set your github login (#{robot.mention_name || robot.name} i am <github username>)"
       return
 
-    deployers.remove_active whom, (manifest) =>
+    deployers.remove_active msg, whom, (manifest) =>
       robot.emit 'deploy-lock:active-cleared', { manifest: manifest, msg: msg } if manifest?
       msg.reply "Cleared active deploy"
 
@@ -361,7 +432,7 @@ module.exports = (robot) ->
 
       mention = "#{target.name}'s"
 
-    deployers.clear target, (manifest) =>
+    deployers.clear msg, target, (manifest) =>
       msg.reply "#{manifest.user.name}'s #{manifest.slug} deploy has been canceled."
       robot.emit 'deploy-lock:cleared', { manifest: manifest, msg: msg }
 
