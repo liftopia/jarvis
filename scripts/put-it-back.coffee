@@ -13,5 +13,5 @@
 #   ajacksified
 
 module.exports = (robot) ->
-  robot.hear /（╯°□°）╯︵ ┻━┻/i, (msg) ->
+  robot.hear /（╯°□°）╯︵ ┻━┻|\((tableflip)\)/i, (msg) ->
     msg.send('┬──┬ ノ( ゜-゜ノ)')
