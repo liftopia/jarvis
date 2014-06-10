@@ -43,7 +43,7 @@ module.exports = (robot) ->
         delete robot.brain.data['users'][id][field]
         msg.send "Deleted #{id}'s #{field}"
 
-  robot.respond /update user (\d+) (\w+) (\w+)$/i, (msg) ->
+  robot.respond /update user (\d+) (\w+) (.*)$/i, (msg) ->
     id = msg.match[1]
     field = msg.match[2]
     value = msg.match[3]
