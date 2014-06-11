@@ -43,13 +43,13 @@ module.exports = (robot) ->
         delete robot.brain.data['users'][id][field]
         msg.send "Deleted #{id}'s #{field}"
 
-  robot.respond /update user (\d+) (\w+) (\w+)$/i, (msg) ->
+  robot.respond /update user (\d+) (\w+) (.*)$/i, (msg) ->
     id = msg.match[1]
     field = msg.match[2]
     value = msg.match[3]
 
     if is_allowed msg, id
-      if field in [ 'id', 'jid', 'name' ]
+      if field in [ 'id', 'name' ]
         msg.send "Don't even try to update #{field}"
       else
         robot.brain.data['users'][id][field] = value
