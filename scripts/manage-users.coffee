@@ -49,7 +49,7 @@ module.exports = (robot) ->
     value = msg.match[3]
 
     if is_allowed msg, id
-      if field in [ 'id', 'jid', 'name' ]
+      if field in [ 'id', 'name' ]
         msg.send "Don't even try to update #{field}"
       else
         robot.brain.data['users'][id][field] = value
