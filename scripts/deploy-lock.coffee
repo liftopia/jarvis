@@ -281,15 +281,17 @@ class Deployers
     github.pullRequests.get options, (err, pull) =>
       return if @handle_error(msg, "Issue getting pull request", err)?
 
+      if opts.verify && user.githubLogin != pull.user.login
+        msg.reply "That's not your pull request."
+        return
+
       options.base = "master"
       options.head = pull.head.ref
 
       github.repos.compareCommits options, (err, commits) =>
         return if @handle_error(msg, "Issue comparing commits", err)?
 
-        unless commits.status is "ahead"
-          message = ""
-
+        if opts.deploying && commits.status is not "ahead"
           if commits.status is "identical"
             msg.reply "Your branch is identical to master, did you forget to push something?"
           else if commits.status is "diverged"
@@ -302,13 +304,29 @@ class Deployers
         github.issues.getComments options, (err, comments) =>
           return if @handle_error(msg, "Issue getting comments", err)?
 
-          unless opts.force?
-            _.each comments, (comment) ->
+          deploy_approved = false
+          qa_approved     = false
+          plan            = get_plan pull.body
+
+          _.each comments, (comment) ->
+            new_plan = get_plan comment
+            plan     = new_plan if new_plan?
+
+            unless opts.force
               if comment.user.login != pull.user.login
                 deploy_approved = true  if /:grapes:/.test comment.body
                 deploy_approved = false if /:lemon:/.test comment.body
+
+                qa_approved = true  if /:cake:/.test comment.body
+                qa_approved = false if /:corn:/.test comment.body
+
+          unless opts.force
             unless deploy_approved
               msg.reply "You don't have grapes yet..."
+              return
+
+            unless qa_approved
+              msg.reply "You don't have cake yet..."
               return
 
           manifest =
@@ -320,6 +338,7 @@ class Deployers
             repo           : repo
             slug           : "#{repo}/#{pull_request}"
             timestamp      : now
+            test_plan      : plan
             url            : "https://github.com/#{default_github_user}/#{repo}/pull/#{pull_request}"
             user           : user
 
@@ -333,6 +352,27 @@ class Deployers
 # Returns a Hubot user
 from_who = (message) ->
   message.message.user
+
+# Internal: Verify presence of qa section, and return the plan if so
+#
+# string - String to check
+#
+# Returns a qa plan if found
+get_plan = (string) ->
+  in_qa = false
+  plan = []
+
+  if /```qa/.test string
+    _.each string.split(/\r?\n/), (line) ->
+      if in_qa
+        if line is '```'
+          in_qa = false
+        else
+          plan.push line
+      else
+        in_qa = true if line is '```qa'
+
+  plan.join('\n') if plan.length > 0
 
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
@@ -358,7 +398,7 @@ module.exports = (robot) ->
 
   # Nicely set up next deployment
   robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) ->
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: false, verify: true }, (manifest) ->
       deployers.activate msg, manifest, (activated) ->
         if activated
           msg.send "Deploying #{manifest.slug} - Branch: #{manifest.branch}"
@@ -373,7 +413,7 @@ module.exports = (robot) ->
 
   # Bypass the next deployer
   robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: true }, (manifest) ->
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: true, verify: false }, (manifest) ->
       active  = deployers.active()
       on_deck = deployers.on_deck()
 
@@ -388,7 +428,7 @@ module.exports = (robot) ->
 
   # Add me to the list of deployers
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)[\s\/]+(\d+)/i, (msg) ->
-    deployers.manifest_from msg, msg.match[1], msg.match[2], { force: false }, (manifest) ->
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: false, force: false, verify: true }, (manifest) ->
       deployers.next msg, manifest, (issue) ->
         msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
         robot.emit 'deploy-lock:next', { manifest: manifest, msg: msg }
@@ -518,10 +558,7 @@ module.exports = (robot) ->
     params[repos[manifest.repo]] = manifest.branch
     params["Confirmed"]          = "true"
 
-    if manifest.user.githubLogin == manifest.githubLogin
-      robot.emit 'jenkins:build', production_job, params, msg
-    else
-      msg.reply "That's not your pull request. To manually deploy, go to #{release_url}."
+    robot.emit 'jenkins:build', production_job, params, msg
 
     topic_handler details
 
