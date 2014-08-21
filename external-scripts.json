@@ -1,4 +1,5 @@
 [
-"hubot-calculator",
-"hubot-plusplus"
+  "hubot-calculator",
+  "hubot-loudbot",
+  "hubot-plusplus"
 ]
