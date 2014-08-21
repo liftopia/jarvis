@@ -32,7 +32,6 @@
     "hubot":               ">= 2.6.0 < 3.0.0",
     "hubot-calculator":    "0.2.0",
     "hubot-hipchat":       "https://github.com/liftopia/hubot-hipchat/archive/fix-roster-updates.tar.gz",
-    "hubot-loudbot":       ">= 1.0.0",
     "hubot-plusplus":      "1.0.x",
     "hubot-scripts":       ">= 2.5.0 < 3.0.0",
     "jenkins":             "*",
