@@ -8,7 +8,6 @@
   "do-it-live.coffee",
   "github-credentials.coffee",
   "github-status.coffee",
-  "hello.coffee",
   "kittens.coffee",
   "lolz.coffee",
   "mongolab-brain.coffee",
