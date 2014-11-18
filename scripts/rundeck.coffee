@@ -4,6 +4,7 @@
 # Dependencies:
 #
 # Configuration:
+#    RUNDECK_PTOPIA_JID
 #   HUBOT_RUNDECK_TOKEN
 #   HUBOT_RUNDECK_URL
 #
