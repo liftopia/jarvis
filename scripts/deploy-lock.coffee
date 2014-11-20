@@ -559,7 +559,7 @@ module.exports = (robot) ->
     params["Confirmed"]          = "true"
 
     if manifest.repo == 'liftopia.com'
-      robot.emit 'rundeck:run', manifest.branch, msg
+      robot.emit 'rundeck:run', manifest, msg
     else
       robot.emit 'jenkins:build', production_job, params, msg
 

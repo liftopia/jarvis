@@ -13,16 +13,19 @@
 #
 # Author:
 #   drewzarr
-
-ptopia_job_id = process.env.RUNDECK_PTOPIA_JID
+_             = require('underscore')
 rundeck_url   = process.env.HUBOT_RUNDECK_URL
 rundeck_token = process.env.HUBOT_RUNDECK_TOKEN
 
 module.exports = (robot) ->
+  robot.on 'rundeck:run', (manifest, msg) ->
+    job_id = {}
+    _.each process.env.HUBOT_RUNDECK_JIDS.split(','), (job) ->
+      [ job, jid ] = job.split(':')
+      job_id[job] = jid
 
-  robot.on 'rundeck:run', (branch, msg) ->
-    data = "argString=-branch #{branch}"
-    robot.http("#{rundeck_url}/api/11/job/#{ptopia_job_id}/run")
+    data = "argString=-branch #{manifest.branch}"
+    robot.http("#{rundeck_url}/api/11/job/#{job_id[manifest.repo]}/run")
       .header('X-Rundeck-Auth-Token', rundeck_token)
       .header('Content-Type', 'application/x-www-form-urlencoded')
       .post(data) (err, res, body) ->
