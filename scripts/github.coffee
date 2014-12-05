@@ -13,16 +13,7 @@
 #   HUBOT_REPOS_LOOKUP
 #
 # Commands:
-#   hubot I'm deploying <repo> <pr#> - Flag yourself as deploying something
-#   hubot I'm really deploying <repo> <pr#> - Bypass the on deck deployer
-#   hubot I'm next <repo> <pr#> - Flag yourself as deploying something soon
-#   hubot I'm done deploying - Let jarvis know you're done
-#   hubot who's next - Find out who's deploying next
-#   hubot (all|list) deployers - List all deployers
-#   hubot who's deploying - List all deployers
-#   hubot deployment history - List the last deployments
-#   hubot remove active deploy - Remove the currently active deploy in case of disappearance
-#   hubot cancel (my|<name>) deploys - Remove all deploys for target
+#   none
 #
 # Author:
 #   amdtech
