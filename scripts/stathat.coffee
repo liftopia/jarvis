@@ -2,7 +2,7 @@
 #   Stathat stat poster
 #
 # Dependencies:
-#   underscore
+#   
 #
 # Configuration:
 #   HUBOT_STATHAT_KEY
