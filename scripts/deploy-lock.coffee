@@ -25,6 +25,7 @@
 #   hubot deployment history - List the last deployments
 #   hubot remove active deploy - Remove the currently active deploy in case of disappearance
 #   hubot cancel (my|<name>) deploys - Remove all deploys for target
+#   hubot deploy failed - Mark the deploy as failed in stathat
 #
 # Author:
 #   amdtech
@@ -557,6 +558,18 @@ module.exports = (robot) ->
   # Some feedback on bad requests
   robot.respond /i(?:'m)?\s*next\s*([\w\.]+)$/i, (msg) ->
     msg.send "You need to tell me the PR you're deploying! (i'm next " + msg.match[1] + " <pr#>)"
+
+  robot.respond /deploy failed/i, (msg) ->
+    active   = deployers.active()
+    history  = deployers.history()
+
+    if active?
+      msg.send "Active deploy marked as failed."
+      robot.emit 'stathat:mark:deployFailed', active, msg
+    else
+      msg.send "Marking last deploy as failed."
+      robot.emit 'stathat:mark:deployFailed', history.slice(0).reverse()[0], msg
+
 
   topic_handler = (details) ->
     msg = details.msg

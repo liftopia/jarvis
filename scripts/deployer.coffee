@@ -369,15 +369,17 @@ module.exports = (robot) ->
   # Destroy a feature server
   robot.respond /destroy (.+)/i, (msg) ->
     destroy msg
+    robot.emit 'stathat:mark:branchDestroy', msg
 
   # Deploy using the previous options
   robot.respond /redeploy (.+)/i, (msg) ->
     redeploy msg
 
   # Deploy our feature server
-  robot.respond /deploy (.+)/i, (msg) ->
+  robot.respond /deploy ((?!failed$).+)/i, (msg) ->
     whom = from_who msg
     deploy msg
+    robot.emit 'stathat:mark:branchCreate', msg
 
   # List all known deployments
   robot.respond /(?:list|get)?\s?deployments/i, (msg) ->
@@ -487,4 +489,3 @@ module.exports = (robot) ->
     catch error
       console.log "jenkins-notify error: #{error}. Data: #{req.body}"
       console.log error.stack
-
