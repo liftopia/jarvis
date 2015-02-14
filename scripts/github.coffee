@@ -63,3 +63,11 @@ module.exports = (robot) ->
   robot.on 'github:pullRequests:merge', (msg, options) ->
     github.pullRequests.merge options, (err, merge) =>
       handle_error(msg, "Issue merging pull request", err)
+
+      unless options.branch == "master" || err?
+        options.ref = "heads/#{options.branch}"
+        robot.emit 'github:gitdata:deleteReference', msg, options
+
+  robot.on 'github:gitdata:deleteReference', (msg, options) ->
+    github.gitdata.deleteReference options, (err, ref) =>
+      handle_error(msg, "Issue deleting #{options.ref}", err)
