@@ -43,7 +43,7 @@ feature_url = (hostname) ->
 #
 # Returns a string
 ssh_url = (hostname) ->
-  "ssh://#{hostname}.#{SSH_DOMAIN}"
+  "ssh://#{hostname}-apps.#{SSH_DOMAIN}"
 
 # Abstract Hubot brain
 class Storage
@@ -161,7 +161,16 @@ class Jenkins
   #
   # Returns nothing
   deploy: (parameters, callback) ->
-    @run_job 'ReleaseBranch', parameters, callback
+    @run_job 'VagrantBranchDeploy', parameters, callback
+
+  # Public: Request a redeployment
+  #
+  # parameters - an hash of key/value pairs to use as GET params
+  # callback - a callback method for the HTTP request
+  #
+  # Returns nothing
+  redeploy: (parameters, callback) ->
+    @run_job 'VagrantBranchRedeploy', parameters, callback
 
   # Public: Destroy the deployment at a particular hostname
   #
@@ -170,7 +179,7 @@ class Jenkins
   #
   # Returns nothing
   destroy: (hostname, callback) ->
-    @run_job 'DestroyBranchHost', {'NodeName': hostname}, callback
+    @run_job 'VagrantBranchDestroy', {'NODE_NAME': hostname}, callback
 
   # Public: Run a job on Jenkins
   #
@@ -187,10 +196,6 @@ class Jenkins
     request = http.create(@url)
       .path("job/#{job}/buildWithParameters?token=dfc0b2ead4a57bc60097286eec01a336&#{safe_params}")
       .header('Content-Length', 0)
-
-    #if process.env.HUBOT_JENKINS_AUTH
-    #  auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
-    #  request.header 'Authorization', "Basic #{auth}"
 
     request.post() callback
 
@@ -227,8 +232,9 @@ punctuation  = ['.', '!', '...']
 
 # Internal: Branch defaults for rtopia and liftopia.com
 defaults =
-  'rtopia':       'master'
   'liftopia.com': 'master'
+  'piggy_bank':   'master'
+  'rtopia':       'master'
 
 # Internal: Create a unique host name
 #
@@ -238,7 +244,8 @@ defaults =
 create_host_name = (grouped_matches) ->
   rtopia         = grouped_matches['rtopia'] || ""
   ptopia         = grouped_matches['liftopia.com'] || ""
-  filtered_array = [rtopia, ptopia].filter (val) -> val.length
+  piggy_bank     = grouped_matches['piggy_bank'] || ""
+  filtered_array = [rtopia, ptopia, piggy_bank].filter (val) -> val.length
   filtered_array.join '-'
 
 # Internal: Create the hash of Jenkins' deployment parameters
@@ -259,13 +266,15 @@ deployment_parameters = (matched_string) ->
   host_name       = cleaned_matches['host_name'] || create_host_name cleaned_matches
   parameters      = _.defaults cleaned_matches, defaults
 
-  ptopia = parameters['liftopia.com']
-  rtopia = parameters['rtopia']
+  ptopia     = parameters['liftopia.com']
+  rtopia     = parameters['rtopia']
+  piggy_bank = parameters['piggy_bank']
 
   url_params =
-    'HOST_NAME': host_name
+    'NODE_NAME': host_name
     'RTOPIA_BRANCH': rtopia
     'PTOPIA_BRANCH': ptopia
+    'PIGGY_BANK_BRANCH': piggy_bank
 
 # Internal: Check some things before we fire off a Jenkins' job
 #
@@ -335,13 +344,13 @@ module.exports = (robot) ->
   # Listen for Jenkins' to tell us when he has deployment
   robot.router.post '/jenkins/branch_release', (req, res) ->
     jenkins_notification req, res, (data) ->
-      hostname = data.build.parameters.HOST_NAME
+      hostname = data.build.parameters.NODE_NAME
       robot.emit 'jenkins:deploy', { hostname: hostname }
 
   # Listen to a notification that a branch was destroyed
   robot.router.post '/jenkins/branch_destroy', (req, res) ->
     jenkins_notification req, res, (data) ->
-      hostname = data.build.parameters.NodeName
+      hostname = data.build.parameters.NODE_NAME
       robot.emit 'jenkins:destroy', { hostname: hostname }
 
   # Allow users to be notified of specific deployments
@@ -404,7 +413,7 @@ module.exports = (robot) ->
   # Returns nothing
   deploy = (message) ->
     params   = deployment_parameters message.match[1]
-    hostname = params['HOST_NAME']
+    hostname = params['NODE_NAME']
 
     validation_errors = validate_hostname hostname
 
@@ -435,7 +444,7 @@ module.exports = (robot) ->
 
       spectators.watch hostname, from_who(message)
 
-      jenkins.deploy params, generic_callback( ->
+      jenkins.redeploy params, generic_callback( ->
         whom = from_who message
       )
     else
