@@ -29,7 +29,7 @@
     "fixed-array":            "1.0.0",
     "github":                 "0.1.16",
     "htmlparser":             "*",
-    "hubot":                  ">= 2.6.0 < 3.0.0",
+    "hubot":                  "2.11.1",
     "hubot-calculator":       "0.3.0",
     "hubot-heroku-keepalive": "0.0.4",
     "hubot-hipchat":          "https://github.com/liftopia/hubot-hipchat/archive/fix-roster-updates.tar.gz",
