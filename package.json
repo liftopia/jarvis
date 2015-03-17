@@ -24,6 +24,7 @@
   },
 
   "dependencies": {
+    "aws2js":                 "0.8.3",
     "bson":                   "*",
     "dateformat":             "*",
     "fixed-array":            "1.0.0",
