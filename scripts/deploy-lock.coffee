@@ -48,61 +48,6 @@ qualified_repo = (repo) ->
   return repo unless (user = default_github_user)?
   "#{user}/#{repo}"
 
-# Abstract Hubot brain
-class Storage
-  # Public: Constructor
-  #
-  # robot - hubot instance
-  # namespace - the namespace for this storage instance
-  #
-  # Returns an instance
-  constructor: (@robot, @namespace) ->
-    @cache = {}
-    @robot.brain.on 'loaded', =>
-      if @robot.brain.data[@namespace]
-        @cache = @robot.brain.data[@namespace]
-
-  # Internal: Wraps a method in a save
-  #
-  # func - a function to wrap
-  #
-  # Returns nothing
-  save_after: ->
-    @robot.brain.data[@namespace] = @cache
-
-  # Public: Stores a value at the given key
-  #
-  # key - a unique identifier
-  # value - anything
-  #
-  # Returns nothing
-  put: (key, value) ->
-    @cache[key] = value
-    @save_after()
-
-  # Public: Gets the value at a specific key
-  #
-  # key - a key to search for
-  #
-  # Returns the value
-  get: (key) ->
-    @cache[key]
-
-  # Public: Removes the value for a given key
-  #
-  # key - the key to remove
-  #
-  # Returns nothing
-  remove: (key) ->
-    delete @cache[key]
-    @save_after
-
-  # Public: Get all stored keys
-  #
-  # Returns an Array of keys
-  keys: ->
-    _.keys @cache
-
 clone = (obj) ->
   if not obj? or typeof obj isnt 'object'
     return obj
@@ -124,19 +69,19 @@ clone = (obj) ->
 
 # A simple class to manage our deployers
 class Deployers
-  constructor : (@store) ->
+  constructor : (@robot, @namespace) ->
 
-  active      : -> @store.get('active')
+  active      : -> @robot.storage.get(@namespace, 'active')
   count       : -> @manifests().length
-  history     : -> @store.get 'history' || []
-  manifests   : -> @store.get('manifests') || []
+  history     : -> @robot.storage.get(@namespace, 'history')   || []
+  manifests   : -> @robot.storage.get(@namespace, 'manifests') || []
   on_deck     : -> @manifests()[0]
 
   push: (manifest) ->
     manifests = @manifests()
 
     manifests.push manifest
-    @store.put 'manifests', manifests
+    @robot.storage.put @namespace, 'manifests', manifests
 
   notify: (msg, manifest, body) ->
     return false if manifest.branch == 'master'
@@ -162,20 +107,21 @@ class Deployers
       if not on_deck?
         @notify msg, manifest, body
 
-        @store.put 'active', manifest
+        @robot.storage.put @namespace, 'active', manifest
         callback?(true)
       else if on_deck.user.id == manifest.user.id && on_deck.slug == manifest.slug
         @notify msg, manifest, body
 
         manifests = @manifests()
-        @store.put 'manifests', manifests.slice(1)
-        @store.put 'active', manifest
+        @robot.storage.put @namespace, 'manifests', manifests.slice(1)
+        @robot.storage.put @namespace, 'active', manifest
+
         callback?(true)
 
   force: (msg, manifest, callback) ->
     @notify msg, manifest, "@#{manifest.user.githubLogin} is forcibly deploying this now."
 
-    @store.put 'active', manifest
+    @robot.storage.put @namespace, 'active', manifest
     @remove manifest
     callback?()
 
@@ -187,14 +133,14 @@ class Deployers
       unless man.user.id == manifest.user.id && man.slug == manifest.slug
         manifests_left.push man
 
-    @store.put 'manifests', manifests_left
+    @robot.storage.put @namespace, 'manifests', manifests_left
 
   done: (msg, user, callback) =>
     active = @active()
     if active?.user.id == user.id
       @notify msg, active, "@#{active.user.githubLogin} has finished deploying."
 
-      @store.remove('active')
+      @robot.storage.remove @namespace, 'active'
       @merge msg, active
       @track active
       callback?(active)
@@ -210,14 +156,14 @@ class Deployers
   track: (active) ->
     history = FixedArray(100, @history())
     history.push active
-    @store.put 'history', history.array
+    @robot.storage.put @namespace, 'history', history.array
 
   remove_active: (msg, user, callback) ->
     active       = @active()
 
     @notify msg, active, "@#{user.githubLogin} canceled this deploy."
 
-    @store.remove('active')
+    @robot.storage.remove @namespace, 'active'
     callback?(active)
 
   topic: ->
@@ -244,7 +190,7 @@ class Deployers
       else
         manifests_left.push manifest
 
-    @store.put 'manifests', manifests_left
+    @robot.storage.put @namespace, 'manifests', manifests_left
 
   handle_error: (msg, message, err) ->
     if err?
@@ -398,8 +344,7 @@ module.exports = (robot) ->
     repos[name]     = param
 
   # Deployers and store initialization
-  deployer_store  = new Storage robot, 'deployers'
-  deployers       = new Deployers deployer_store
+  deployers       = new Deployers robot, 'deployers'
 
   # Basic error handling for logging and notification of errors
   robot.error (err, msg) ->
@@ -512,6 +457,9 @@ module.exports = (robot) ->
     history = deployers.history()
 
     messages = []
+    if _.isEmpty(history)
+      messages.push 'No deployment history!'
+
     for manifest in history.slice(0).reverse()
       timestamp = manifest.human_time
       timestamp ?= "No Timestamp"
