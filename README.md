@@ -1,6 +1,6 @@
 # Hubot
 
-This is a version of GitHub's Campfire bot, hubot. He's pretty cool.
+This is a version of GitHub's Campfire bot, hubot. He's pretty cool. He runs on cedar-14.
 
 This version is designed to be deployed on [Heroku][heroku].
 
