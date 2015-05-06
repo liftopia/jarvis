@@ -350,13 +350,17 @@ module.exports = (robot) ->
     data = req.body
 
     params = deploy_store.get name
-    if params?
-      for type, hostname of data
-        params.nodes[type] = hostname
-      deploy_store.put name, params
-      res.send 'OK'
-    else
-      res.status(404).send 'FAIL'
+    if !params?
+      params =
+        NODE_NAME: name
+        deployer:
+          name: 'Manually Deployed'
+        nodes: {}
+
+    for type, hostname of data
+      params.nodes[type] = hostname
+    deploy_store.put name, params
+    res.send 'OK'
 
   # Show the nodes in the staging cluster
   robot.router.get '/deployments/:env/:name/nodes', (req, res) ->
