@@ -14,8 +14,8 @@
 #   hubot I'm watching <hostname> - Receive a notification anytime this host is deployed
 #   hubot I watch <hostname> - Receive a notification anytime this host is deployed
 #   hubot forget <hostname> - No longer receive notifications for these deployments
-#   hubot fuhgeddaboud <hostname> - Ya ain't tryin' ta hear about it no mo
 #   hubot deploy <hostname> <repo/branch> <repo/branch> - Deploy a custom branch server
+#   hubot deploy failed - A production deployment failed, so track it
 #   hubot redeploy <hostname> - Re-trigger the last known deployment for this host
 #   hubot destroy <hostname> - Destroy the server
 #
@@ -26,24 +26,23 @@ querystring = require 'querystring'
 _           = require 'underscore'
 http        = require 'scoped-http-client'
 
-BRANCH_DOMAIN = 'liftopia.net'
-SSH_DOMAIN    = 'liftopia.nu'
+STAGING_DOMAIN = 'liftopia.net'
 
-# Internal: Get the url for a hostname
+# Internal: Convert an environment name to an http url
 #
-# hostname - the feature server's hostname
+# hostname - the environment's name
 #
 # Returns a string
 feature_url = (hostname) ->
-  "http://#{hostname}.#{BRANCH_DOMAIN}"
+  "http://#{hostname}.#{STAGING_DOMAIN}"
 
-# Internal: Get the ssh url for a hostname
+# Internal: Convert a hostname to an ssh url
 #
 # hostname - the server's hostname
 #
 # Returns a string
 ssh_url = (hostname) ->
-  "ssh://#{hostname}-apps.#{SSH_DOMAIN}"
+  "ssh://#{hostname}"
 
 # Abstract Hubot brain
 class Storage
@@ -213,23 +212,6 @@ class Jenkins
   safe_url_params: (parameters) ->
     querystring.stringify parameters
 
-# Internal: A list of responses for Hubot to use
-confirmative = [
-  "10-4",
-  "Affirmative",
-  "Anything for you",
-  "Copy that",
-  "I'm on it",
-  "If that's what you want",
-  "Roger that",
-  "Sure, that can be arranged"
-  "With great pleasure",
-  "Yeah",
-  "You've got it",
-]
-
-punctuation  = ['.', '!', '...']
-
 # Internal: Branch defaults for rtopia and liftopia.com
 defaults =
   'liftopia.com': 'master'
@@ -287,23 +269,13 @@ validate_hostname = (hostname) ->
     errors.push "Host name: #{hostname} is too long."
   errors
 
-# Internal: Acknowledge the command with a random phrase
+# Internal: Acknowledge the command
 #
 # message - Hubot message
 #
 # Returns nothing
 acknowledge = ->
-  phrase    = random confirmative
-  punct     = random punctuation
-  "#{phrase}#{punct}"
-
-# Internal: Get a random array element
-#
-# arr - an array
-#
-# Return a value
-random = (arr) ->
-  arr[Math.floor(Math.random()*arr.length)]
+  "Okie Dokie."
 
 # Internal: Get user's hipchat name from message
 #
@@ -353,6 +325,70 @@ module.exports = (robot) ->
       hostname = data.build.parameters.NODE_NAME
       robot.emit 'jenkins:destroy', { hostname: hostname }
 
+  # Generate fake staging stuffs
+  if process.env.HUBOT_ENABLE_TESTING?
+    robot.router.get '/deployments/:env/:name/generate', (req, res) ->
+      name = req.params.name
+      params =
+        'NODE_NAME': name
+        'RTOPIA_BRANCH': 'master'
+        'PTOPIA_BRANCH': 'master'
+        'PIGGY_BANK_BRANCH': 'master'
+        deployer:
+          id: 123
+          jid: '123@chat.what.com'
+          name: 'Deploy Bot'
+          mention_name: 'deploybot'
+
+      deploy_store.put name, params
+      res.send 'OK'
+
+  # Track node details for rundeck and deployment list
+  robot.router.post '/deployments/:env/:name/nodes', (req, res) ->
+    name = req.params.name
+    env  = req.params.env
+    data = req.body
+
+    params = deploy_store.get name
+    if !params?
+      params =
+        NODE_NAME: name
+        deployer:
+          name: 'Manually Deployed'
+        nodes: {}
+
+    for type, hostname of data
+      params.nodes[type] = hostname
+    deploy_store.put name, params
+    res.send 'OK'
+
+  # Show the nodes in the staging cluster
+  robot.router.get '/deployments/:env/:name/nodes', (req, res) ->
+    name = req.params.name
+    nodes = deploy_store.get(name)['nodes']
+
+    if nodes?
+      res.send nodes
+    else
+      res.status(404).send 'FAIL'
+
+  # Grab the xml version of the entire node list
+  robot.router.get '/deployments/:env/nodes.xml', (req, res) ->
+    hosts = deploy_store.keys()
+    rundeck_xml = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd">',
+      '<project>'
+    ]
+    if hosts.length > 0
+      for i, host of hosts
+        params = deploy_store.get(host)
+        if params?.nodes?
+          for type, hostname of params.nodes
+            rundeck_xml.push "  <node name=\"#{host}-#{type}\" description=\"#{host}-#{type}\" tags=\"core,base,staging,#{host},#{type}\" hostname=\"#{hostname}\" osArch=\"x86_64\" osFamily=\"unix\" osName=\"ubuntu\" osVersion=\"14.04\" username=\"rundeck_runner\" environment=\"staging\" roles=\"base,#{type}\" type=\"Node\"/>"
+    rundeck_xml.push '</project>'
+    res.send(rundeck_xml.join("\n"))
+
   # Allow users to be notified of specific deployments
   robot.respond /I(?:'m)? watch(?:ing)? (.*)/i, (msg) ->
     whom = from_who msg
@@ -360,20 +396,10 @@ module.exports = (robot) ->
     msg.send acknowledge()
 
   # Let users forget about a deployment
-  robot.respond /(fuhgeddaboud|forget) (.*)/i, (msg) ->
+  robot.respond /forget (.*)/i, (msg) ->
     whom = from_who msg
     spectators.forget msg.match[1], whom
     msg.send acknowledge()
-
-  # Returns a snarky remark
-  robot.respond /deploy$/i, (msg) ->
-    msg.send msg.random ["Wrong!",
-      "You're new at this aren't you?",
-      "Hahahaha! No.",
-      "Successfully declined.",
-      "No thanks.",
-      "Let me add that to my list of things not to do.",
-      "Try again."]
 
   # Destroy a feature server
   robot.respond /destroy (.+)/i, (msg) ->
@@ -386,7 +412,6 @@ module.exports = (robot) ->
 
   # Deploy our feature server
   robot.respond /deploy ((?!failed$).+)/i, (msg) ->
-    whom = from_who msg
     deploy msg
     robot.emit 'stathat:mark:branchCreate', msg
 
@@ -395,16 +420,26 @@ module.exports = (robot) ->
     hosts = deploy_store.keys()
     if hosts.length > 0
       host_list = for i, host of hosts
-        params = deploy_store.get(host)
-        "#{feature_url host} - #{ssh_url host}\nR / #{params?["RTOPIA_BRANCH"]} | P / #{params?["PTOPIA_BRANCH"]}"
+        params  = deploy_store.get(host)
+        details = []
+        if params.deployer?.name?
+          details.push params.deployer.name
+          details.push ' - '
+        details.push feature_url host
+        if params.nodes?.apps?
+          details.push ' - '
+          details.push ssh_url params.nodes.apps
+        details.push "\n"
+        details.push "R / #{params?["RTOPIA_BRANCH"]}"
+        details.push ' | '
+        details.push "P / #{params?["PTOPIA_BRANCH"]}"
+        details.push ' | '
+        details.push "PB / #{params?["PIGGY_BANK_BRANCH"]}"
+        details.join('')
+
       msg.send host_list.join("\n")
     else
-      response = random(["There are none, you might want to fix that.",
-        "Empty.",
-        "(crickets)",
-        "You've got to deploy something first.",
-        "There aren't any, get to work!"])
-      msg.send response
+      msg.send "There aren't any staging clusters right now."
 
   # Internal: Kick off the deployment job
   #
@@ -421,6 +456,8 @@ module.exports = (robot) ->
       spectators.watch hostname, from_who(message)
 
       message.send acknowledge()
+      params.deployer = from_who(message)
+      params.nodes = {}
       deploy_store.put hostname, params
 
       jenkins.deploy params, generic_callback( ->
@@ -457,16 +494,10 @@ module.exports = (robot) ->
   # Returns nothing
   destroy = (message) ->
     hostname = message.match[1]
-    remarks = ["Let's watch the world burn!",
-      "Target eliminated.",
-      "Extinguished.",
-      "You're sick!  What if he had a family...",
-      "This is the best part of my job!",
-      "click. click. (boom)"]
 
     jenkins.destroy hostname, generic_callback( ->
       whom = from_who message
-      message.send random(remarks)
+      message.send "Destroying staging cluster #{hostname}."
     )
 
   # Internal: Generic callback for Jenkins' requests
