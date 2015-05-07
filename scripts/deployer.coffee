@@ -387,6 +387,7 @@ module.exports = (robot) ->
           for type, hostname of params.nodes
             rundeck_xml.push "  <node name=\"#{host}-#{type}\" description=\"#{host}-#{type}\" tags=\"core,base,staging,#{host},#{type}\" hostname=\"#{hostname}\" osArch=\"x86_64\" osFamily=\"unix\" osName=\"ubuntu\" osVersion=\"14.04\" username=\"rundeck_runner\" environment=\"staging\" roles=\"base,#{type}\" type=\"Node\"/>"
     rundeck_xml.push '</project>'
+    res.set('Content-Type', 'text/xml');
     res.send(rundeck_xml.join("\n"))
 
   # Allow users to be notified of specific deployments
