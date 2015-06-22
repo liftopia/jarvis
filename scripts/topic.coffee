@@ -20,7 +20,7 @@ module.exports = (robot) ->
     for own comp, topic of topics[msg.envelope.room]
       new_topic.push topic
 
-    msg.topic(new_topic.join("\n"))
+    msg.topic(new_topic.join(' | '))
 
   robot.on 'update-topic', (details) ->
     topics = get_topics()
