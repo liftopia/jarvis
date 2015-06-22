@@ -1,1 +1,1 @@
-web: bin/hubot -a hipchat -n jarvis
+web: bin/hubot -a slack -n jarvis
