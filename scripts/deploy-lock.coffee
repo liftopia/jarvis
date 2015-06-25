@@ -358,42 +358,40 @@ module.exports = (robot) ->
   robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
     if msg.match[1] == 'http://liftopia.com'
       msg.match[1] = 'liftopia.com'
-      msg.send msg.match[1]
-    # deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: false, verify: true }, (manifest) ->
-    #   deployers.activate msg, manifest, (activated) ->
-    #     if activated
-    #       msg.send "Deploying #{manifest.slug} - Branch: #{manifest.branch}"
-    #       robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
-    #     else
-    #       on_deck = deployers.on_deck()
-    #       active = deployers.active()
-    #       if active?
-    #         msg.send "Negative. #{active.user.name} is currently deploying #{active.slug}."
-    #       else
-    #         msg.send "Negative. #{on_deck.user.name} is deploying #{on_deck.slug} next."
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: false, verify: true }, (manifest) ->
+      deployers.activate msg, manifest, (activated) ->
+        if activated
+          msg.send "Deploying #{manifest.slug} - Branch: #{manifest.branch}"
+          robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
+        else
+          on_deck = deployers.on_deck()
+          active = deployers.active()
+          if active?
+            msg.send "Negative. #{active.user.name} is currently deploying #{active.slug}."
+          else
+            msg.send "Negative. #{on_deck.user.name} is deploying #{on_deck.slug} next."
 
   # Bypass the next deployer
   robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
     if msg.match[1] == 'http://liftopia.com'
       msg.match[1] = 'liftopia.com'
-      msg.send msg.match[1]
-    # deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: true, verify: false }, (manifest) ->
-    #   active  = deployers.active()
-    #   on_deck = deployers.on_deck()
-    #
-    #   if active?
-    #     msg.reply "Sorry, #{active.user.name} is currently deploying #{active.slug}."
-    #   else
-    #     msg.reply "Ok, you're bypassing #{on_deck.user.name}." if on_deck?
-    #
-    #     deployers.force msg, manifest, () ->
-    #       msg.send "Deploy bypass active, #{manifest.user.name} has jumped the gun with #{manifest.slug}."
-    #       robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
+    deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: true, verify: false }, (manifest) ->
+      active  = deployers.active()
+      on_deck = deployers.on_deck()
+
+      if active?
+        msg.reply "Sorry, #{active.user.name} is currently deploying #{active.slug}."
+      else
+        msg.reply "Ok, you're bypassing #{on_deck.user.name}." if on_deck?
+
+        deployers.force msg, manifest, () ->
+          msg.send "Deploy bypass active, #{manifest.user.name} has jumped the gun with #{manifest.slug}."
+          robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
 
   # Add me to the list of deployers
   robot.respond /i(?:'m)?\s*next\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
     if (msg.match[1] == 'http://liftopia.com')
-       msg.match[1] = "liftopia.com"
+      msg.match[1] = "liftopia.com"
     deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: false, force: false, verify: true }, (manifest) ->
       deployers.next msg, manifest, () ->
         msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
