@@ -355,9 +355,8 @@ module.exports = (robot) ->
     "Be more specific, I know #{users.length} people named like that: #{(user.name for user in users).join(", ")}"
 
   # Nicely set up next deployment
-  robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
-    if msg.match[1] == 'http://liftopia.com'
-      msg.match[1] = 'liftopia.com'
+  robot.respond /i(?:[’']?m)?\s+deploy(?:ing)?\s+(\S+)\/(\d+|master)/i, (msg) ->
+    msg.match[1] = msg.match[1].replace(/https?:\/\//, '')
     deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: false, verify: true }, (manifest) ->
       deployers.activate msg, manifest, (activated) ->
         if activated
@@ -372,9 +371,8 @@ module.exports = (robot) ->
             msg.send "Negative. #{on_deck.user.name} is deploying #{on_deck.slug} next."
 
   # Bypass the next deployer
-  robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
-    if msg.match[1] == 'http://liftopia.com'
-      msg.match[1] = 'liftopia.com'
+  robot.respond /i(?:[’']?m)?\s+really\s+deploy(?:ing)?\s+(\S+)\/(\d+|master)/i, (msg) ->
+    msg.match[1] = msg.match[1].replace(/https?:\/\//, '')
     deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: true, verify: false }, (manifest) ->
       active  = deployers.active()
       on_deck = deployers.on_deck()
@@ -389,16 +387,15 @@ module.exports = (robot) ->
           robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
 
   # Add me to the list of deployers
-  robot.respond /i(?:'m)?\s*next\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
-    if (msg.match[1] == 'http://liftopia.com')
-      msg.match[1] = "liftopia.com"
+  robot.respond /i(?:[’']?m)?\s+next\s+(\S+)\/(\d+|master)/i, (msg) ->
+    msg.match[1] = msg.match[1].replace(/https?:\/\//, '')
     deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: false, force: false, verify: true }, (manifest) ->
       deployers.next msg, manifest, () ->
         msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
         robot.emit 'deploy-lock:next', { manifest: manifest, msg: msg }
 
   # Remove my deploy
-  robot.respond /i(?:'m)?\s*done\s*deploying$/i, (msg) ->
+  robot.respond /i(?:[’']?m)?\s+done\s+deploying$/i, (msg) ->
     whom = from_who msg
 
     deployers.done msg, whom, (manifest) ->
@@ -482,7 +479,7 @@ module.exports = (robot) ->
     msg.send messages.join("\n")
 
   # Get the next deployer's info
-  robot.respond /who(?:'s)?\s*next[\!\?]*\s*$/i, (msg) ->
+  robot.respond /who(?:[’']?s)?\s+next[\!\?\s]*$/i, (msg) ->
     next = deployers.on_deck()
 
     if next
@@ -491,7 +488,7 @@ module.exports = (robot) ->
       msg.reply "Nobody's on deck"
 
   # Show all the deployers waiting
-  robot.respond /(?:(?:list|all)\s+deployers|who(?:'s)? deploying\??)$/i, (msg) ->
+  robot.respond /(?:(?:list|all)\s+deployers|who(?:[’']?s)? deploying\??)$/i, (msg) ->
     list     = deployers.manifests()
     active   = deployers.active()
     messages = []
@@ -506,11 +503,11 @@ module.exports = (robot) ->
     msg.send messages.join("\n")
 
   # Some feedback on bad requests
-  robot.respond /i(?:'m)?\s*next$/i, (msg) ->
+  robot.respond /i(?:[’']?m)?\s*next$/i, (msg) ->
     msg.send "You need to tell me what you want to deploy! (i'm next <repo> <pr#>)"
 
   # Some feedback on bad requests
-  robot.respond /i(?:'m)?\s*next\s*([\w\.]+)$/i, (msg) ->
+  robot.respond /i(?:[’']?m)?\s*next\s*([\w\.]+)$/i, (msg) ->
     msg.send "You need to tell me the PR you're deploying! (i'm next " + msg.match[1] + " <pr#>)"
 
   robot.respond /deploy failed/i, (msg) ->
