@@ -355,7 +355,9 @@ module.exports = (robot) ->
     "Be more specific, I know #{users.length} people named like that: #{(user.name for user in users).join(", ")}"
 
   # Nicely set up next deployment
-  robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
+  robot.respond /i(?:'m)?\s*deploy(?:ing)?\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
+    if msg.match[1] == 'http://liftopia.com'
+      msg.match[1] = 'liftopia.com'
     deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: false, verify: true }, (manifest) ->
       deployers.activate msg, manifest, (activated) ->
         if activated
@@ -370,7 +372,9 @@ module.exports = (robot) ->
             msg.send "Negative. #{on_deck.user.name} is deploying #{on_deck.slug} next."
 
   # Bypass the next deployer
-  robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*([\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
+  robot.respond /i(?:'m)?\s*really\s+deploy(?:ing)?\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
+    if msg.match[1] == 'http://liftopia.com'
+      msg.match[1] = 'liftopia.com'
     deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: true, force: true, verify: false }, (manifest) ->
       active  = deployers.active()
       on_deck = deployers.on_deck()
@@ -385,7 +389,9 @@ module.exports = (robot) ->
           robot.emit 'deploy-lock:deploying', { manifest: manifest, msg: msg }
 
   # Add me to the list of deployers
-  robot.respond /i(?:'m)?\s*next\s*([\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
+  robot.respond /i(?:'m)?\s*next\s*(h?t?t?p?s?:?\/?\/?[\w\.]+)[\s\/]+(\d+|master)/i, (msg) ->
+    if (msg.match[1] == 'http://liftopia.com')
+      msg.match[1] = "liftopia.com"
     deployers.manifest_from msg, msg.match[1], msg.match[2], { deploying: false, force: false, verify: true }, (manifest) ->
       deployers.next msg, manifest, () ->
         msg.reply "You want to deploy #{manifest.slug}. You're ##{deployers.count()}."
