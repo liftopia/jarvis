@@ -337,6 +337,7 @@ get_plan = (string) ->
 module.exports = (robot) ->
   release_url     = process.env.JENKINS_RELEASE_URL
   production_job  = process.env.JENKINS_PRODUCTION_JOB
+  rtopia_job      = 'ReleaseRtopia'
   repos           = {}
 
   _.each process.env.HUBOT_REPOS_LOOKUP?.split(','), (details) ->
@@ -536,6 +537,8 @@ module.exports = (robot) ->
 
     if manifest.repo == 'liftopia.com'
       robot.emit 'rundeck:run', manifest, msg
+    else if manifest.repo == 'rtopia'
+      robot.emit 'jenkins:build', rtopia_job, params, msg
     else
       robot.emit 'jenkins:build', production_job, params, msg
 
