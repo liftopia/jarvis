@@ -336,7 +336,6 @@ get_plan = (string) ->
 # Add our new functionality to Hubot!
 module.exports = (robot) ->
   release_url     = process.env.JENKINS_RELEASE_URL
-  production_job  = process.env.JENKINS_PRODUCTION_JOB
   rtopia_job      = 'ReleaseRtopia'
   repos           = {}
 
@@ -535,12 +534,10 @@ module.exports = (robot) ->
     params[repos[manifest.repo]] = manifest.branch
     params["Confirmed"]          = "true"
 
-    if manifest.repo == 'liftopia.com'
+    if manifest.repo == 'liftopia.com' || manifest.repo == 'piggy_bank'
       robot.emit 'rundeck:run', manifest, msg
-    else if manifest.repo == 'rtopia'
+    else # rtopia
       robot.emit 'jenkins:build', rtopia_job, params, msg
-    else
-      robot.emit 'jenkins:build', production_job, params, msg
 
     topic_handler details
 
