@@ -151,6 +151,7 @@ class Deployers
     return false if active.branch == 'master'
 
     options = clone active.github_options
+    options.branch = active.branch
     robot.emit 'github:pullRequests:merge', msg, options
 
   track: (active) ->
