@@ -535,6 +535,7 @@ module.exports = (robot) ->
     params                       = {}
     params[repos[manifest.repo]] = manifest.branch
     params["Confirmed"]          = "true"
+    params['REPO']               = manifest.repo
 
     if manifest.repo == 'liftopia.com' || manifest.repo == 'piggy_bank'
       robot.emit 'rundeck:run', manifest, msg
