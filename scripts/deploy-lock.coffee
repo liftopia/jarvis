@@ -338,7 +338,8 @@ get_plan = (string) ->
 module.exports = (robot) ->
   release_url     = process.env.JENKINS_RELEASE_URL
   rtopia_job      = 'ReleaseRtopia'
-  ember_job       = 'DeployEmberApp'
+  cloudstore_job  = 'DeployCloudstoreClient'
+  core_job        = 'DeployCoreClient'
   repos           = {}
 
   _.each process.env.HUBOT_REPOS_LOOKUP?.split(','), (details) ->
@@ -541,9 +542,11 @@ module.exports = (robot) ->
       robot.emit 'rundeck:run', manifest, msg
     else if manifest.repo == 'rtopia'
       robot.emit 'jenkins:build', rtopia_job, params, msg
-    else # EmberApps
-      robot.emit 'jenkinsio:build', ember_job, params, msg
-
+    else if manifest.repo == 'cloudstore_client'
+      robot.emit 'jenkinsio:build', cloudsore_job, params, msg
+    else # core_client
+      robot.emit 'jenkinsio:build', core_job, params, msg
+      
     topic_handler details
 
   robot.on 'deploy-lock:next', (details) ->
