@@ -543,10 +543,10 @@ module.exports = (robot) ->
     else if manifest.repo == 'rtopia'
       robot.emit 'jenkins:build', rtopia_job, params, msg
     else if manifest.repo == 'cloudstore_client'
-      robot.emit 'jenkinsio:build', cloudsore_job, params, msg
+      robot.emit 'jenkinsio:build', cloudstore_job, params, msg
     else # core_client
       robot.emit 'jenkinsio:build', core_job, params, msg
-      
+
     topic_handler details
 
   robot.on 'deploy-lock:next', (details) ->
