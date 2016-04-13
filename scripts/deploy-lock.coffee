@@ -274,19 +274,11 @@ class Deployers
 
               unless opts.force
                 if comment.user.login != pull.user.login
-                  if /🍇/.test comment.body
-                    deploy_approved = true
-                  else if /:grapes:/.test comment.body
-                    deploy_approved = true
-                  else
-                    deploy_approved = false
+                  deploy_approved = true  if /:grapes:/.test comment.body
+                  deploy_approved = false if /:lemon:/.test comment.body
 
-                  if /🍰/.test comment.body
-                    qa_approved = true
-                  else if  /:cake:/.test comment.body
-                    qa_approved = true
-                  else
-                    qa_false = false
+                  qa_approved = true  if /:cake:/.test comment.body
+                  qa_approved = false if /:corn:/.test comment.body
 
             unless opts.force
               unless deploy_approved
