@@ -538,7 +538,7 @@ module.exports = (robot) ->
     params["Confirmed"]          = "true"
     params['REPO']               = manifest.repo
 
-    if manifest.repo == 'liftopia.com' || manifest.repo == 'piggy_bank'
+    if manifest.repo == 'ptopia' || manifest.repo == 'piggy_bank'
       robot.emit 'rundeck:run', manifest, msg
     else if manifest.repo == 'rtopia'
       robot.emit 'jenkins:build', rtopia_job, params, msg
