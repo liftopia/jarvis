@@ -544,8 +544,8 @@ module.exports = (robot) ->
       robot.emit 'jenkins:build', rtopia_job, params, msg
     else if manifest.repo == 'cloudstore_client'
       robot.emit 'jenkinsio:build', cloudstore_job, params, msg
-    else # core_client
-      robot.emit 'jenkinsio:build', core_job, params, msg
+    else
+      msg.send "I can't deploy that repo"
 
     topic_handler details
 
